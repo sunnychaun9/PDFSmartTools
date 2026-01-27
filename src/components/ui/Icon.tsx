@@ -133,7 +133,7 @@ function Icon({ name, size = 24, color }: IconProps) {
       <Text
         style={[
           styles.emoji,
-          { fontSize: size * 0.7 },
+          { fontSize: size * 0.7, lineHeight: size },
           color ? { color } : null,
         ]}
       >
@@ -150,6 +150,8 @@ const styles = StyleSheet.create({
   },
   emoji: {
     textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
   },
 });
 

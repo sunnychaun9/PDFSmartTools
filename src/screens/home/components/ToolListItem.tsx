@@ -133,7 +133,6 @@ const styles = StyleSheet.create({
   },
   accentBar: {
     width: 4,
-    height: '100%',
     position: 'absolute',
     left: 0,
     top: 0,

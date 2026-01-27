@@ -1,6 +1,7 @@
 import React, { useRef, useState, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
+import { useSharedValue, runOnJS } from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
 import ViewShot from 'react-native-view-shot';
 import RNFS from 'react-native-fs';
@@ -47,14 +48,10 @@ const SignaturePad = forwardRef<SignaturePadRef, SignaturePadProps>(
     const [currentPath, setCurrentPath] = useState<Point[]>([]);
     const viewShotRef = useRef<ViewShot>(null);
 
-    // Use refs to track drawing state (avoid stale closures in gesture handlers)
-    const isDrawingRef = useRef(false);
-    const currentPathRef = useRef<Point[]>([]);
-    const pathsRef = useRef<PathData[]>([]);
-
-    // Keep refs in sync with state
-    currentPathRef.current = currentPath;
-    pathsRef.current = paths;
+    // Use shared values for worklet-accessible state
+    const isDrawing = useSharedValue(false);
+    const currentPoints = useSharedValue<Point[]>([]);
+    const allPaths = useSharedValue<PathData[]>([]);
 
     // Convert points to SVG path string
     const pointsToPath = useCallback((points: Point[]): string => {
@@ -69,13 +66,29 @@ const SignaturePad = forwardRef<SignaturePadRef, SignaturePadProps>(
 
       for (let i = 1; i < points.length; i++) {
         const curr = points[i];
-
-        // Simple line drawing for better performance
         path += ` L ${curr.x} ${curr.y}`;
       }
 
       return path;
     }, []);
+
+    // JS thread callbacks
+    const handleStart = useCallback((point: Point) => {
+      setCurrentPath([point]);
+      onBegin?.();
+    }, [onBegin]);
+
+    const handleUpdate = useCallback((points: Point[]) => {
+      setCurrentPath(points);
+    }, []);
+
+    const handleEnd = useCallback((pathData: PathData | null) => {
+      if (pathData) {
+        setPaths(prev => [...prev, pathData]);
+      }
+      setCurrentPath([]);
+      onEnd?.();
+    }, [onEnd]);
 
     // Gesture handler for drawing
     const panGesture = Gesture.Pan()
@@ -83,47 +96,49 @@ const SignaturePad = forwardRef<SignaturePadRef, SignaturePadProps>(
       .minPointers(1)
       .maxPointers(1)
       .onStart((event) => {
-        isDrawingRef.current = true;
+        'worklet';
+        isDrawing.value = true;
         const newPoint = { x: event.x, y: event.y };
-        currentPathRef.current = [newPoint];
-        setCurrentPath([newPoint]);
-        onBegin?.();
+        currentPoints.value = [newPoint];
+        runOnJS(handleStart)(newPoint);
       })
       .onUpdate((event) => {
-        if (isDrawingRef.current) {
+        'worklet';
+        if (isDrawing.value) {
           const newPoint = { x: event.x, y: event.y };
-          const newPath = [...currentPathRef.current, newPoint];
-          currentPathRef.current = newPath;
-          setCurrentPath(newPath);
+          const newPoints = [...currentPoints.value, newPoint];
+          currentPoints.value = newPoints;
+          runOnJS(handleUpdate)(newPoints);
         }
       })
       .onEnd(() => {
-        if (isDrawingRef.current && currentPathRef.current.length > 0) {
+        'worklet';
+        if (isDrawing.value && currentPoints.value.length > 0) {
           const newPathData: PathData = {
-            points: [...currentPathRef.current],
+            points: [...currentPoints.value],
             color: penColor,
             strokeWidth: strokeWidth,
           };
-          const newPaths = [...pathsRef.current, newPathData];
-          pathsRef.current = newPaths;
-          setPaths(newPaths);
+          allPaths.value = [...allPaths.value, newPathData];
+          runOnJS(handleEnd)(newPathData);
+        } else {
+          runOnJS(handleEnd)(null);
         }
-        currentPathRef.current = [];
-        setCurrentPath([]);
-        isDrawingRef.current = false;
-        onEnd?.();
+        currentPoints.value = [];
+        isDrawing.value = false;
       });
 
     // Expose methods via ref
     useImperativeHandle(ref, () => ({
       clearSignature: () => {
-        pathsRef.current = [];
-        currentPathRef.current = [];
+        allPaths.value = [];
+        currentPoints.value = [];
+        isDrawing.value = false;
         setPaths([]);
         setCurrentPath([]);
       },
       readSignature: async () => {
-        if (pathsRef.current.length === 0) {
+        if (paths.length === 0) {
           return null;
         }
         try {
@@ -140,8 +155,8 @@ const SignaturePad = forwardRef<SignaturePadRef, SignaturePadProps>(
           return null;
         }
       },
-      isEmpty: () => pathsRef.current.length === 0,
-    }));
+      isEmpty: () => paths.length === 0,
+    }), [paths]);
 
     return (
       <GestureHandlerRootView style={[styles.container, style]}>

@@ -554,6 +554,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   toggleOptionActive: {
+    borderRadius: borderRadius.md,
     ...shadows.sm,
   },
   grid: {

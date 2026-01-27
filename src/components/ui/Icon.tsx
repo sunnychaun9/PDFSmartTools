@@ -133,7 +133,7 @@ function Icon({ name, size = 24, color }: IconProps) {
       <Text
         style={[
           styles.emoji,
-          { fontSize: size * 0.7, lineHeight: size },
+          { fontSize: size * 0.7 },
           color ? { color } : null,
         ]}
       >

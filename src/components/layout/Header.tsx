@@ -80,7 +80,7 @@ function Header({
               onPressOut={handlePressOut}
               android_ripple={{ color: `${colors.primary}30`, borderless: true }}
             >
-              <Icon name="arrow-left" size={20} color={colors.primary} />
+              <Icon name="chevron-left" size={44} color={colors.primary} />
             </Pressable>
           </Animated.View>
         ) : null}
@@ -110,20 +110,22 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   leftSection: {
-    width: 52,
+    width: 56,
     alignItems: 'flex-start',
+    justifyContent: 'center',
   },
   titleSection: {
     flex: 1,
     alignItems: 'center',
   },
   rightSection: {
-    width: 52,
+    width: 56,
     alignItems: 'flex-end',
+    justifyContent: 'center',
   },
   backButton: {
-    width: 42,
-    height: 42,
+    width: 48,
+    height: 48,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: borderRadius.lg,

@@ -1,3 +1,10 @@
+/**
+ * ProGate Component
+ *
+ * TODO: Re-enable subscriptions - Set FEATURE_FLAGS.SUBSCRIPTIONS_ENABLED to true
+ * to restore feature gating functionality
+ */
+
 import React, { type ReactNode } from 'react';
 import { View, StyleSheet, Pressable } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -6,6 +13,7 @@ import { Text, Icon } from '../ui';
 import { colors, spacing, borderRadius } from '../../theme';
 import { useSubscription } from '../../context';
 import { RootStackParamList } from '../../navigation/types';
+import { FEATURE_FLAGS } from '../../config/featureFlags';
 
 type ProGateProps = {
   children: ReactNode;
@@ -20,6 +28,8 @@ type ProGateProps = {
 /**
  * Component to gate Pro features
  * Shows upgrade prompt for free users, renders children for Pro users
+ *
+ * TODO: Re-enable subscriptions - Currently always returns children (no gating)
  */
 export default function ProGate({
   children,
@@ -33,6 +43,17 @@ export default function ProGate({
   const handleUpgrade = () => {
     navigation.navigate('Pro');
   };
+
+  // TODO: Re-enable subscriptions - Remove this early return when ready
+  // Subscriptions disabled - always show children (no gating)
+  if (!FEATURE_FLAGS.SUBSCRIPTIONS_ENABLED) {
+    return <>{children}</>;
+  }
+
+  // ============================================================================
+  // TODO: Re-enable subscriptions - The code below will run when subscriptions
+  // are enabled. Currently bypassed by the early return above.
+  // ============================================================================
 
   // Pro users see the full feature
   if (isPro) {
@@ -79,6 +100,8 @@ export default function ProGate({
 
 /**
  * Hook to check Pro status and get upgrade navigation
+ *
+ * TODO: Re-enable subscriptions - Currently isPro is always false
  */
 export function useProGate() {
   const { isPro } = useSubscription();

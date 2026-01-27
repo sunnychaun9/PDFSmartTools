@@ -11,6 +11,7 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
+  TouchableOpacity,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -23,6 +24,7 @@ import { Icon, IconName } from '../../components/ui';
 import { BannerAdView } from '../../components/ads';
 import { useTheme } from '../../context';
 import { useSubscription } from '../../context';
+import { FEATURE_FLAGS } from '../../config/featureFlags';
 import { pickPdfFile } from '../../services/filePicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -109,6 +111,22 @@ const TOOLS: Tool[] = [
   },
   {
     id: '9',
+    title: 'Unlock PDF',
+    description: 'Remove password',
+    icon: 'unlock',
+    route: 'UnlockPdf',
+    color: colors.unlockPdf,
+  },
+  {
+    id: '10',
+    title: 'Word to PDF',
+    description: 'Convert DOC/DOCX',
+    icon: 'file-text',
+    route: 'WordToPdf',
+    color: colors.wordToPdf,
+  },
+  {
+    id: '11',
     title: 'View PDF',
     description: 'Read PDF files',
     icon: 'eye',
@@ -116,7 +134,7 @@ const TOOLS: Tool[] = [
     color: colors.viewPdf,
   },
   {
-    id: '10',
+    id: '12',
     title: 'Go Pro',
     description: 'Unlock all features',
     icon: 'crown',
@@ -132,12 +150,16 @@ type ViewMode = 'grid' | 'list';
 export default function HomeScreen() {
   const { width } = useWindowDimensions();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { isDark, theme } = useTheme();
+  const { isDark, theme, toggleTheme } = useTheme();
   const { isPro } = useSubscription();
 
   // View mode state
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const toggleScale = useRef(new Animated.Value(1)).current;
+
+  // Theme toggle animation
+  const themeToggleAnim = useRef(new Animated.Value(isDark ? 1 : 0)).current;
+  const themeToggleScale = useRef(new Animated.Value(1)).current;
 
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -155,6 +177,34 @@ export default function HomeScreen() {
     };
     loadViewMode();
   }, []);
+
+  // Animate theme toggle when isDark changes
+  useEffect(() => {
+    Animated.spring(themeToggleAnim, {
+      toValue: isDark ? 1 : 0,
+      useNativeDriver: true,
+      speed: 20,
+      bounciness: 8,
+    }).start();
+  }, [isDark, themeToggleAnim]);
+
+  // Handle theme toggle with animation
+  const handleThemeToggle = useCallback(() => {
+    Animated.sequence([
+      Animated.timing(themeToggleScale, {
+        toValue: 0.85,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.spring(themeToggleScale, {
+        toValue: 1,
+        useNativeDriver: true,
+        speed: 50,
+        bounciness: 10,
+      }),
+    ]).start();
+    toggleTheme();
+  }, [toggleTheme, themeToggleScale]);
 
   // Toggle view mode with animation
   const toggleViewMode = useCallback(async () => {
@@ -249,6 +299,10 @@ export default function HomeScreen() {
         navigation.navigate('PdfToImage');
       } else if (route === 'ProtectPdf') {
         navigation.navigate('ProtectPdf');
+      } else if (route === 'UnlockPdf') {
+        navigation.navigate('UnlockPdf');
+      } else if (route === 'WordToPdf') {
+        navigation.navigate('WordToPdf');
       } else {
         navigation.navigate(route as any);
       }
@@ -256,8 +310,11 @@ export default function HomeScreen() {
     [navigation, handleViewPdf]
   );
 
-  // Filter out Pro card if user is already Pro
-  const visibleTools = isPro ? TOOLS.filter(t => t.id !== '10') : TOOLS;
+  // Filter out Pro card if user is already Pro or subscriptions are disabled
+  // TODO: Re-enable subscriptions - Remove FEATURE_FLAGS check when ready
+  const visibleTools = (isPro || !FEATURE_FLAGS.SUBSCRIPTIONS_ENABLED)
+    ? TOOLS.filter(t => t.id !== '12')
+    : TOOLS;
 
   // Get current greeting based on time
   const getGreeting = () => {
@@ -285,9 +342,59 @@ export default function HomeScreen() {
             },
           ]}
         >
-          <Text style={[styles.greeting, { color: theme.textSecondary }]}>
-            {getGreeting()}
-          </Text>
+          <View style={styles.headerTop}>
+            <Text style={[styles.greeting, { color: theme.textSecondary }]}>
+              {getGreeting()}
+            </Text>
+            {/* Theme Toggle */}
+            <Animated.View style={{ transform: [{ scale: themeToggleScale }] }}>
+              <TouchableOpacity
+                onPress={handleThemeToggle}
+                activeOpacity={0.7}
+                style={[
+                  styles.themeToggle,
+                  {
+                    backgroundColor: isDark ? theme.surface : `${colors.primary}10`,
+                    borderColor: isDark ? theme.border : `${colors.primary}20`,
+                  },
+                ]}
+              >
+                <Animated.View
+                  style={[
+                    styles.themeToggleTrack,
+                    {
+                      backgroundColor: isDark
+                        ? `${colors.primary}30`
+                        : `${colors.warning}20`,
+                    },
+                  ]}
+                >
+                  <Animated.View
+                    style={[
+                      styles.themeToggleThumb,
+                      {
+                        backgroundColor: isDark ? colors.primary : colors.warning,
+                        transform: [
+                          {
+                            translateX: themeToggleAnim.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [0, 24],
+                            }),
+                          },
+                        ],
+                      },
+                    ]}
+                  >
+                    <Icon
+                      name={isDark ? 'moon' : 'sun'}
+                      size={14}
+                      color="#FFFFFF"
+                    />
+                  </Animated.View>
+                </Animated.View>
+              </TouchableOpacity>
+            </Animated.View>
+          </View>
           <Text style={[styles.title, { color: theme.textPrimary }]}>
             PDF Smart Tools
           </Text>
@@ -310,7 +417,7 @@ export default function HomeScreen() {
           <View style={styles.statsContent}>
             <View style={styles.statItem}>
               <Text style={[styles.statValue, { color: colors.textOnPrimary }]}>
-                10
+                12
               </Text>
               <Text style={[styles.statLabel, { color: isDark ? theme.textSecondary : 'rgba(255,255,255,0.8)' }]}>
                 Tools
@@ -327,8 +434,9 @@ export default function HomeScreen() {
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
+              {/* TODO: Re-enable subscriptions - Show isPro status when ready */}
               <Text style={[styles.statValue, { color: colors.textOnPrimary }]}>
-                {isPro ? 'Pro' : 'Free'}
+                {FEATURE_FLAGS.SUBSCRIPTIONS_ENABLED ? (isPro ? 'Pro' : 'Free') : 'Free'}
               </Text>
               <Text style={[styles.statLabel, { color: isDark ? theme.textSecondary : 'rgba(255,255,255,0.8)' }]}>
                 Plan
@@ -476,12 +584,37 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xl,
     paddingBottom: spacing.md,
   },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   greeting: {
     fontSize: typography.sizes.sm,
     fontFamily: typography.fonts.medium,
     fontWeight: '500',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
+  },
+  themeToggle: {
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    padding: 4,
+  },
+  themeToggleTrack: {
+    width: 52,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    paddingHorizontal: 2,
+  },
+  themeToggleThumb: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.sm,
   },
   title: {
     fontSize: 32,

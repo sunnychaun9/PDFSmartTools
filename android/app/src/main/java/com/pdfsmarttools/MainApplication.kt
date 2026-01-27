@@ -14,6 +14,8 @@ import com.pdfsmarttools.pdfsigner.PdfSignerPackage
 import com.pdfsmarttools.pdfsplitter.PdfSplitterPackage
 import com.pdfsmarttools.pdftoimage.PdfToImagePackage
 import com.pdfsmarttools.pdfprotector.PdfProtectorPackage
+import com.pdfsmarttools.pdfunlock.PdfUnlockPackage
+import com.pdfsmarttools.wordtopdf.WordToPdfPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -31,6 +33,8 @@ class MainApplication : Application(), ReactApplication {
           add(PdfSplitterPackage())
           add(PdfToImagePackage())
           add(PdfProtectorPackage())
+          add(PdfUnlockPackage())
+          add(WordToPdfPackage())
         },
     )
   }

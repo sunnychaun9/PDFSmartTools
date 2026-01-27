@@ -25,6 +25,8 @@ export type RootStackParamList = {
   SplitPdf: undefined;
   PdfToImage: undefined;
   ProtectPdf: undefined;
+  UnlockPdf: undefined;
+  WordToPdf: undefined;
   Pro: undefined;
   FilePicker: { mode: 'pdf' | 'image'; returnRoute: keyof RootStackParamList };
 };

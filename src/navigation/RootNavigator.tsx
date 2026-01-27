@@ -14,6 +14,8 @@ import { SignPdfScreen, SignatureCreateScreen } from '../screens/sign-pdf';
 import { SplitPdfScreen } from '../screens/split-pdf';
 import { PdfToImageScreen } from '../screens/pdf-to-image';
 import { ProtectPdfScreen } from '../screens/protect-pdf';
+import { UnlockPdfScreen } from '../screens/pdf-unlock';
+import { WordToPdfScreen } from '../screens/word-to-pdf';
 import ProScreen from '../screens/pro/ProScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -68,6 +70,16 @@ export default function RootNavigator() {
       <Stack.Screen
         name="ProtectPdf"
         component={ProtectPdfScreen}
+        options={{ animation: 'slide_from_bottom' }}
+      />
+      <Stack.Screen
+        name="UnlockPdf"
+        component={UnlockPdfScreen}
+        options={{ animation: 'slide_from_bottom' }}
+      />
+      <Stack.Screen
+        name="WordToPdf"
+        component={WordToPdfScreen}
         options={{ animation: 'slide_from_bottom' }}
       />
       <Stack.Screen

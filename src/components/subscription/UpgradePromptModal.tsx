@@ -1,3 +1,10 @@
+/**
+ * Upgrade Prompt Modal
+ *
+ * TODO: Re-enable subscriptions - Set FEATURE_FLAGS.SUBSCRIPTIONS_ENABLED to true
+ * to restore upgrade prompts
+ */
+
 import React from 'react';
 import {
   View,
@@ -9,6 +16,7 @@ import {
 import { Text, Icon } from '../ui';
 import { colors, spacing, borderRadius, shadows } from '../../theme';
 import { useTheme } from '../../context';
+import { FEATURE_FLAGS } from '../../config/featureFlags';
 
 type UpgradePromptModalProps = {
   visible: boolean;
@@ -26,6 +34,12 @@ export default function UpgradePromptModal({
   onCancel,
 }: UpgradePromptModalProps) {
   const { theme } = useTheme();
+
+  // TODO: Re-enable subscriptions - Remove this check when ready
+  // Don't show upgrade prompts when subscriptions are disabled
+  if (!FEATURE_FLAGS.SUBSCRIPTIONS_ENABLED) {
+    return null;
+  }
 
   return (
     <Modal

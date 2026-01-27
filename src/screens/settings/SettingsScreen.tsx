@@ -27,6 +27,7 @@ import {
   CompressionLevel,
   AppSettings,
 } from '../../utils/storage';
+import { FEATURE_FLAGS } from '../../config/featureFlags';
 
 type SettingItemProps = {
   icon: string;
@@ -244,8 +245,9 @@ export default function SettingsScreen() {
           </Text>
         </Animated.View>
 
-        {/* Premium Section - Only show if not Pro */}
-        {!isPro && (
+        {/* Premium Section - Only show if not Pro and subscriptions enabled */}
+        {/* TODO: Re-enable subscriptions - Remove FEATURE_FLAGS check when ready */}
+        {!isPro && FEATURE_FLAGS.SUBSCRIPTIONS_ENABLED && (
           <Animated.View
             style={[
               styles.section,

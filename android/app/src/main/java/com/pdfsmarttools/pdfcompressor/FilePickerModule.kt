@@ -40,8 +40,36 @@ class FilePickerModule(private val reactContext: ReactApplicationContext) :
         }
     }
 
+    @ReactMethod
+    fun pickWordFile(promise: Promise) {
+        val activity = reactContext.currentActivity
+        if (activity == null) {
+            promise.reject("ACTIVITY_NULL", "Activity is null")
+            return
+        }
+
+        pickerPromise = promise
+
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            // Support both DOC and DOCX
+            type = "*/*"
+            putExtra(Intent.EXTRA_MIME_TYPES, arrayOf(
+                "application/msword",                                                    // .doc
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document" // .docx
+            ))
+        }
+
+        try {
+            activity.startActivityForResult(intent, REQUEST_CODE_PICK_WORD)
+        } catch (e: Exception) {
+            pickerPromise = null
+            promise.reject("PICKER_ERROR", "Cannot open file picker: ${e.message}")
+        }
+    }
+
     override fun onActivityResult(activity: Activity, requestCode: Int, resultCode: Int, data: Intent?) {
-        if (requestCode != REQUEST_CODE_PICK_PDF) {
+        if (requestCode != REQUEST_CODE_PICK_PDF && requestCode != REQUEST_CODE_PICK_WORD) {
             return
         }
 
@@ -76,8 +104,8 @@ class FilePickerModule(private val reactContext: ReactApplicationContext) :
         // Not needed
     }
 
-    private fun getFileInfo(uri: Uri): FileInfo {
-        var name = "document.pdf"
+    private fun getFileInfo(uri: Uri, defaultName: String = "document.pdf"): FileInfo {
+        var name = defaultName
         var size = 0L
 
         reactContext.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
@@ -86,7 +114,7 @@ class FilePickerModule(private val reactContext: ReactApplicationContext) :
                 val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
 
                 if (nameIndex >= 0) {
-                    name = cursor.getString(nameIndex) ?: "document.pdf"
+                    name = cursor.getString(nameIndex) ?: defaultName
                 }
                 if (sizeIndex >= 0) {
                     size = cursor.getLong(sizeIndex)
@@ -101,5 +129,6 @@ class FilePickerModule(private val reactContext: ReactApplicationContext) :
 
     companion object {
         private const val REQUEST_CODE_PICK_PDF = 9001
+        private const val REQUEST_CODE_PICK_WORD = 9002
     }
 }

@@ -120,6 +120,15 @@ dependencies {
     // Apache PDFBox for PDF encryption (Password Protect feature)
     implementation("com.tom-roush:pdfbox-android:2.0.27.0")
 
+    // Apache POI for Word document processing (Word to PDF feature)
+    implementation("org.apache.poi:poi:5.2.3")
+    implementation("org.apache.poi:poi-ooxml:5.2.3") {
+        exclude group: 'org.apache.xmlgraphics', module: 'batik-all'
+        exclude group: 'de.rototor.pdfbox', module: 'graphics2d'
+        exclude group: 'org.apache.xmlgraphics', module: 'fop'
+    }
+    implementation("org.apache.poi:poi-scratchpad:5.2.3")
+
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")
     } else {

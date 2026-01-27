@@ -1,3 +1,10 @@
+/**
+ * Subscription Context
+ *
+ * TODO: Re-enable subscriptions - Set FEATURE_FLAGS.SUBSCRIPTIONS_ENABLED to true
+ * and the full subscription functionality will be restored
+ */
+
 import React, {
   createContext,
   useContext,
@@ -6,6 +13,7 @@ import React, {
   useCallback,
   type ReactNode,
 } from 'react';
+import { FEATURE_FLAGS } from '../config/featureFlags';
 import {
   initializeIAP,
   finalizeIAP,
@@ -62,6 +70,8 @@ type SubscriptionProviderProps = {
 };
 
 export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
+  // TODO: Re-enable subscriptions - isPro will be determined by actual subscription status
+  // when FEATURE_FLAGS.SUBSCRIPTIONS_ENABLED is true
   const [isPro, setIsPro] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -77,6 +87,21 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
     let mounted = true;
 
     async function init() {
+      // TODO: Re-enable subscriptions - Remove this early return when ready
+      if (!FEATURE_FLAGS.SUBSCRIPTIONS_ENABLED) {
+        // Subscriptions disabled - treat all users as free
+        if (mounted) {
+          setIsPro(false);
+          setIsLoading(false);
+          setIsInitialized(true);
+        }
+        return;
+      }
+
+      // ============================================================================
+      // TODO: Re-enable subscriptions - The code below will run when subscriptions
+      // are enabled. Currently bypassed by the early return above.
+      // ============================================================================
       try {
         // Load cached status first for instant UI
         const cachedStatus = await getCachedSubscriptionStatus();
@@ -152,6 +177,12 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
 
   // Purchase function
   const purchase = useCallback(async (sku: SubscriptionSku): Promise<boolean> => {
+    // TODO: Re-enable subscriptions - Remove this early return when ready
+    if (!FEATURE_FLAGS.SUBSCRIPTIONS_ENABLED) {
+      // Pro disabled - purchase not available
+      return false;
+    }
+
     try {
       setIsLoading(true);
       const success = await purchaseSubscription(sku);
@@ -170,6 +201,17 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
 
   // Restore function
   const restore = useCallback(async (): Promise<boolean> => {
+    // TODO: Re-enable subscriptions - Remove this early return when ready
+    if (!FEATURE_FLAGS.SUBSCRIPTIONS_ENABLED) {
+      // Pro disabled - restore not available
+      setNotification({
+        type: 'info',
+        title: 'Subscriptions Unavailable',
+        message: 'Subscription features are currently unavailable.',
+      });
+      return false;
+    }
+
     try {
       setIsLoading(true);
       const status = await restorePurchases();
@@ -204,6 +246,11 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
 
   // Refresh function
   const refresh = useCallback(async (): Promise<void> => {
+    // TODO: Re-enable subscriptions - Remove this early return when ready
+    if (!FEATURE_FLAGS.SUBSCRIPTIONS_ENABLED) {
+      return;
+    }
+
     try {
       setIsLoading(true);
       const status = await restorePurchases();

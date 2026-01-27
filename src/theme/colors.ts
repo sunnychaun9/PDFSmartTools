@@ -63,6 +63,10 @@ export const colors = {
   pdfToImageGradient: ['#A855F7', '#9333EA'] as const,
   protectPdf: '#059669',
   protectPdfGradient: ['#059669', '#047857'] as const,
+  unlockPdf: '#EF4444',
+  unlockPdfGradient: ['#EF4444', '#DC2626'] as const,
+  wordToPdf: '#2563EB',
+  wordToPdfGradient: ['#2563EB', '#1D4ED8'] as const,
   proPlan: '#8B5CF6',
   proPlanGradient: ['#8B5CF6', '#7C3AED'] as const,
 

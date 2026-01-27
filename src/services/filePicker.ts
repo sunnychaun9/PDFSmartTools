@@ -72,6 +72,50 @@ export async function pickPdfFile(): Promise<PickedFile | null> {
   }
 }
 
+export async function pickWordFile(): Promise<PickedFile | null> {
+  if (Platform.OS !== 'android') {
+    throw new Error('File picker is only supported on Android');
+  }
+
+  if (!FilePicker) {
+    throw new Error('FilePicker native module is not available');
+  }
+
+  try {
+    const result = await FilePicker.pickWordFile();
+
+    if (!result) {
+      return null;
+    }
+
+    // Validate file extension
+    const name = result.name.toLowerCase();
+    if (!name.endsWith('.doc') && !name.endsWith('.docx')) {
+      throw new Error('Please select a Word document (.doc or .docx)');
+    }
+
+    // Copy to cache for processing
+    const localPath = await copyToCache(result.uri, result.name);
+
+    // Get actual size from cached file
+    const stat = await RNFS.stat(localPath);
+    const size = stat.size;
+
+    return {
+      uri: result.uri,
+      name: result.name,
+      size: size,
+      formattedSize: formatFileSize(size),
+      localPath,
+    };
+  } catch (error) {
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error('Failed to pick Word file');
+  }
+}
+
 export async function cleanupPickedFile(localPath: string): Promise<void> {
   try {
     const exists = await RNFS.exists(localPath);

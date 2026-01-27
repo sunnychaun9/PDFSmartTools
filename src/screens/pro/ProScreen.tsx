@@ -1,3 +1,10 @@
+/**
+ * Pro Screen
+ *
+ * TODO: Re-enable subscriptions - Set FEATURE_FLAGS.SUBSCRIPTIONS_ENABLED to true
+ * to restore full Pro screen functionality
+ */
+
 import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, ScrollView, ActivityIndicator, Pressable, Animated } from 'react-native';
 import { SafeScreen, Header, Spacer } from '../../components/layout';
@@ -5,6 +12,7 @@ import { Text, Button, Icon, Card } from '../../components/ui';
 import { colors, spacing, borderRadius, shadows } from '../../theme';
 import { useSubscription, useTheme } from '../../context';
 import { SUBSCRIPTION_SKUS, type SubscriptionSku } from '../../services/subscriptionService';
+import { FEATURE_FLAGS } from '../../config/featureFlags';
 
 const FEATURES = [
   { icon: '🚫', text: 'Ad-free experience', description: 'No interruptions' },
@@ -63,6 +71,45 @@ export default function ProScreen() {
       setIsPurchasing(false);
     }
   };
+
+  // TODO: Re-enable subscriptions - Remove this view when ready
+  // Subscriptions disabled view
+  if (!FEATURE_FLAGS.SUBSCRIPTIONS_ENABLED) {
+    return (
+      <SafeScreen>
+        <Header title="Pro Features" />
+        <Animated.View
+          style={[
+            styles.proStatusContainer,
+            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+          ]}
+        >
+          <View style={[styles.proStatusIcon, { backgroundColor: `${colors.proPlan}15` }]}>
+            <Text style={styles.proEmoji}>🎁</Text>
+          </View>
+          <Spacer size="lg" />
+          <Text variant="h2" align="center" style={{ color: theme.textPrimary }}>
+            All Features Unlocked!
+          </Text>
+          <Spacer size="sm" />
+          <Text variant="body" align="center" style={{ color: theme.textSecondary }}>
+            Enjoy all PDF Smart Tools features for free
+          </Text>
+          <Spacer size="xl" />
+          <View style={[styles.proFeatures, { backgroundColor: theme.surfaceVariant }]}>
+            {FEATURES.map((feature, index) => (
+              <View key={index} style={styles.featureRow}>
+                <View style={[styles.featureIconActive, { backgroundColor: colors.success }]}>
+                  <Icon name="check" size={14} color={colors.textOnPrimary} />
+                </View>
+                <Text variant="body" style={{ color: theme.textPrimary }}>{feature.text}</Text>
+              </View>
+            ))}
+          </View>
+        </Animated.View>
+      </SafeScreen>
+    );
+  }
 
   // Pro status view
   if (isPro) {

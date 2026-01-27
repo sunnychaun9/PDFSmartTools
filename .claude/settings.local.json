@@ -1,0 +1,41 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm ls:*)",
+      "Bash(./gradlew assembleDebug:*)",
+      "Bash(gradlew.bat clean:*)",
+      "Bash(cmd /c \"gradlew.bat clean\")",
+      "Bash(./gradlew clean:*)",
+      "Bash(cmd.exe /c \"gradlew.bat clean\")",
+      "Bash(npx react-native run-android)",
+      "Bash(timeout:*)",
+      "Bash(cmd.exe /c \"cd C:\\\\Users\\\\ADMIN\\\\Projects\\\\PDFSmartTools\\\\android && gradlew.bat app:installDebug -PreactNativeDevServerPort=8081\")",
+      "Bash(cmd.exe /c \"cd C:\\\\Users\\\\ADMIN\\\\Projects\\\\PDFSmartTools\\\\android && .\\\\gradlew.bat clean && .\\\\gradlew.bat assembleDebug\")",
+      "Bash(powershell.exe -Command \"Set-Location ''C:\\\\Users\\\\ADMIN\\\\Projects\\\\PDFSmartTools\\\\android''; .\\\\gradlew.bat assembleDebug 2>&1\")",
+      "Bash(cd:*)",
+      "Bash(powershell.exe -Command \".\\\\gradlew.bat assembleDebug --info 2>&1 | Select-Object -Last 50\")",
+      "Bash(powershell.exe -Command \"Set-Location ''C:\\\\Users\\\\ADMIN\\\\Projects\\\\PDFSmartTools\\\\android''; .\\\\gradlew.bat assembleDebug 2>&1 | Select-Object -Last 30\")",
+      "Bash(powershell.exe -Command \"Get-ChildItem ''C:\\\\Users\\\\ADMIN\\\\Projects\\\\PDFSmartTools\\\\android\\\\app\\\\build\\\\outputs\\\\apk\\\\debug'' | Select-Object Name, Length, LastWriteTime\")",
+      "Bash(powershell.exe -Command \"Set-Location ''C:\\\\Users\\\\ADMIN\\\\Projects\\\\PDFSmartTools''; npx react-native run-android 2>&1\")",
+      "Bash(adb devices:*)",
+      "Bash(adb install:*)",
+      "Bash(adb connect:*)",
+      "Bash(powershell.exe -Command \"Start-Process -FilePath ''cmd'' -ArgumentList ''/c cd /d C:\\\\Users\\\\ADMIN\\\\Projects\\\\PDFSmartTools && npx react-native start'' -WindowStyle Hidden\")",
+      "Bash(adb shell:*)",
+      "Bash(adb reverse:*)",
+      "Bash(powershell.exe -Command \"Start-Process -FilePath ''cmd.exe'' -ArgumentList ''/k cd /d C:\\\\Users\\\\ADMIN\\\\Projects\\\\PDFSmartTools && npx react-native start''\")",
+      "Bash(npx react-native start)",
+      "Bash(powershell.exe:*)",
+      "Bash(ipconfig:*)",
+      "Bash(ls -la \"C:\\\\Users\\\\ADMIN\\\\Projects\\\\PDFSmartTools\\\\src\\\\services\"\" 2>/dev/null | grep -i \".ts \")",
+      "Bash(node scripts/generate-icons.js:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(wc:*)",
+      "Bash(tree:*)",
+      "Bash(git remote add:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}

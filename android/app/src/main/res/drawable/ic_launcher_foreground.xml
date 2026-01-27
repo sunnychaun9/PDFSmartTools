@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Centered in 72x72 safe zone (18dp padding on each side) -->
+    <group>
+        <!-- PDF Document - Main Shape -->
+        <!-- Document shadow for depth -->
+        <path
+            android:pathData="M32,22 L58,22 L72,36 L72,86 L32,86 Z"
+            android:fillColor="#000000"
+            android:fillAlpha="0.2"/>
+
+        <!-- Main document body - white -->
+        <path
+            android:pathData="M30,20 L56,20 L70,34 L70,84 L30,84 Z"
+            android:fillColor="#FFFFFF"/>
+
+        <!-- Folded corner effect -->
+        <path
+            android:pathData="M56,20 L56,34 L70,34 Z"
+            android:fillColor="#E8EAF6"/>
+
+        <!-- Folded corner inner line -->
+        <path
+            android:pathData="M56,20 L70,34"
+            android:strokeColor="#C5CAE9"
+            android:strokeWidth="1"
+            android:fillColor="#00000000"/>
+
+        <!-- PDF Badge - Red banner -->
+        <path
+            android:pathData="M26,44 L74,44 L74,62 L26,62 Z"
+            android:fillColor="#E53935"/>
+
+        <!-- PDF Text - Bold and clear -->
+        <!-- Letter P -->
+        <path
+            android:pathData="M34,48 L34,58 M34,48 L40,48 C43,48 43,52 40,52 L34,52"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="3"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:fillColor="#00000000"/>
+
+        <!-- Letter D -->
+        <path
+            android:pathData="M47,48 L47,58 M47,48 L51,48 C56,48 56,58 51,58 L47,58"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="3"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:fillColor="#00000000"/>
+
+        <!-- Letter F -->
+        <path
+            android:pathData="M61,48 L61,58 M61,48 L69,48 M61,52 L67,52"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="3"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:fillColor="#00000000"/>
+
+        <!-- Content lines on document -->
+        <path
+            android:pathData="M36,70 L64,70"
+            android:strokeColor="#C5CAE9"
+            android:strokeWidth="3"
+            android:strokeLineCap="round"/>
+
+        <path
+            android:pathData="M36,77 L56,77"
+            android:strokeColor="#E8EAF6"
+            android:strokeWidth="3"
+            android:strokeLineCap="round"/>
+
+        <!-- Smart Tools Gear - Bottom right corner -->
+        <!-- Gear background circle -->
+        <path
+            android:pathData="M72,76 m-16,0 a16,16 0 1,1 32,0 a16,16 0 1,1 -32,0"
+            android:fillColor="#2196F3"/>
+
+        <!-- Gear teeth - 8 teeth around -->
+        <path
+            android:pathData="
+                M72,60 L75,64 L69,64 Z
+                M72,92 L69,88 L75,88 Z
+                M56,76 L60,73 L60,79 Z
+                M88,76 L84,79 L84,73 Z
+                M60,64 L65,67 L62,71 Z
+                M84,64 L81,71 L78,67 Z
+                M60,88 L62,81 L65,85 Z
+                M84,88 L78,85 L81,81 Z"
+            android:fillColor="#2196F3"/>
+
+        <!-- Gear inner white ring -->
+        <path
+            android:pathData="M72,76 m-9,0 a9,9 0 1,1 18,0 a9,9 0 1,1 -18,0"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="4"
+            android:fillColor="#00000000"/>
+
+        <!-- Gear center -->
+        <path
+            android:pathData="M72,76 m-3.5,0 a3.5,3.5 0 1,1 7,0 a3.5,3.5 0 1,1 -7,0"
+            android:fillColor="#FFFFFF"/>
+    </group>
+</vector>

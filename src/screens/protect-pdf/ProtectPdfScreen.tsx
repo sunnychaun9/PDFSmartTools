@@ -25,7 +25,7 @@ import {
 } from '../../services/pdfProtectorService';
 import { pickPdfFile, PickedFile, cleanupPickedFile } from '../../services/filePicker';
 import { loadInterstitialAd, showInterstitialAd } from '../../services/adService';
-import { useTheme } from '../../context';
+import { useTheme, useRating } from '../../context';
 import { addRecentFile } from '../../services/recentFilesService';
 import { sharePdfFile } from '../../services/shareService';
 import { canUse, consume, getRemaining, FEATURES } from '../../services/usageLimitService';
@@ -254,6 +254,7 @@ function ResultCard({
 export default function ProtectPdfScreen() {
   const { isPro, navigateToUpgrade } = useProGate();
   const { theme } = useTheme();
+  const { onSuccessfulAction } = useRating();
 
   // File state
   const [selectedFile, setSelectedFile] = useState<PickedFile | null>(null);
@@ -421,13 +422,14 @@ export default function ProtectPdfScreen() {
 
       // Show ad
       await showInterstitialAd(isPro);
+      onSuccessfulAction();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Protection failed';
       setErrorModal({ visible: true, title: 'Protection Failed', message });
     } finally {
       setIsProtecting(false);
     }
-  }, [selectedFile, password, confirmPassword, isPro, refreshRemainingUses]);
+  }, [selectedFile, password, confirmPassword, isPro, refreshRemainingUses, onSuccessfulAction]);
 
   const handleSaveToDownloads = useCallback(async () => {
     if (!protectionResult || !selectedFile) return;

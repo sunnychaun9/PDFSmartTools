@@ -24,8 +24,7 @@ import {
 } from '../../services/pdfUnlockService';
 import { pickPdfFile, PickedFile, cleanupPickedFile } from '../../services/filePicker';
 import { loadInterstitialAd, showInterstitialAd } from '../../services/adService';
-import { useTheme } from '../../context';
-import { useSubscription } from '../../context';
+import { useTheme, useSubscription, useRating } from '../../context';
 import { addRecentFile } from '../../services/recentFilesService';
 import { sharePdfFile } from '../../services/shareService';
 
@@ -219,6 +218,7 @@ function ResultCard({
 export default function UnlockPdfScreen() {
   const { theme } = useTheme();
   const { isPro } = useSubscription();
+  const { onSuccessfulAction } = useRating();
 
   // File state
   const [selectedFile, setSelectedFile] = useState<PickedFile | null>(null);
@@ -341,6 +341,7 @@ export default function UnlockPdfScreen() {
 
       // Show ad
       await showInterstitialAd(isPro);
+      onSuccessfulAction();
     } catch (err: any) {
       const errorCode = err.code || '';
       const message = getErrorMessage(errorCode, err.message);
@@ -359,7 +360,7 @@ export default function UnlockPdfScreen() {
     } finally {
       setIsUnlocking(false);
     }
-  }, [selectedFile, password, isPro]);
+  }, [selectedFile, password, isPro, onSuccessfulAction]);
 
   const handleSaveToDownloads = useCallback(async () => {
     if (!unlockResult || !selectedFile) return;

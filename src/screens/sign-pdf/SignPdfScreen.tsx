@@ -16,7 +16,7 @@ import { Button, Text, Icon, AppModal } from '../../components/ui';
 import { ProgressBar } from '../../components/feedback';
 import { useProGate, UpgradePromptModal } from '../../components/subscription';
 import { colors, spacing, borderRadius, shadows } from '../../theme';
-import { useTheme } from '../../context';
+import { useTheme, useRating } from '../../context';
 import { RootStackParamList } from '../../navigation/types';
 import { pickPdfFile, PickedFile, cleanupPickedFile } from '../../services/filePicker';
 import {
@@ -48,6 +48,7 @@ export default function SignPdfScreen() {
   const route = useRoute<SignPdfRouteProp>();
   const { isPro, navigateToUpgrade } = useProGate();
   const { theme } = useTheme();
+  const { onSuccessfulAction } = useRating();
 
   // State
   const [selectedFile, setSelectedFile] = useState<PickedFile | null>(null);
@@ -218,6 +219,7 @@ export default function SignPdfScreen() {
       await refreshRemainingUses();
 
       await showInterstitialAd(isPro);
+      onSuccessfulAction();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Signing failed';
       setErrorModal({ visible: true, title: 'Signing Failed', message });
@@ -234,6 +236,7 @@ export default function SignPdfScreen() {
     currentPage,
     isSignButtonDisabled,
     refreshRemainingUses,
+    onSuccessfulAction,
   ]);
 
   const handleSaveToDownloads = useCallback(async () => {

@@ -16,6 +16,7 @@ import com.pdfsmarttools.pdftoimage.PdfToImagePackage
 import com.pdfsmarttools.pdfprotector.PdfProtectorPackage
 import com.pdfsmarttools.pdfunlock.PdfUnlockPackage
 import com.pdfsmarttools.wordtopdf.WordToPdfPackage
+import com.pdfsmarttools.inappupdate.InAppUpdatePackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -35,6 +36,7 @@ class MainApplication : Application(), ReactApplication {
           add(PdfProtectorPackage())
           add(PdfUnlockPackage())
           add(WordToPdfPackage())
+          add(InAppUpdatePackage())
         },
     )
   }

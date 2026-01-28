@@ -28,7 +28,7 @@ import {
 } from '../../services/pdfToImageService';
 import { pickPdfFile, PickedFile, cleanupPickedFile } from '../../services/filePicker';
 import { loadInterstitialAd, showInterstitialAd } from '../../services/adService';
-import { useTheme } from '../../context';
+import { useTheme, useRating } from '../../context';
 import { canUse, consume, getRemaining, FEATURES } from '../../services/usageLimitService';
 import Share from 'react-native-share';
 
@@ -401,6 +401,7 @@ function ResultCard({
 export default function PdfToImageScreen() {
   const { isPro, navigateToUpgrade } = useProGate();
   const { theme } = useTheme();
+  const { onSuccessfulAction } = useRating();
 
   // File state
   const [selectedFile, setSelectedFile] = useState<PickedFile | null>(null);
@@ -523,6 +524,7 @@ export default function PdfToImageScreen() {
 
       // Show ad
       await showInterstitialAd(isPro);
+      onSuccessfulAction();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Conversion failed';
       if (message.includes('encrypted') || message.includes('password')) {
@@ -543,7 +545,7 @@ export default function PdfToImageScreen() {
     } finally {
       setIsConverting(false);
     }
-  }, [selectedFile, selectedFormat, selectedPageSelection, selectedPageIndex, isPro, refreshRemainingUses]);
+  }, [selectedFile, selectedFormat, selectedPageSelection, selectedPageIndex, isPro, refreshRemainingUses, onSuccessfulAction]);
 
   const handleSaveToDownloads = useCallback(async () => {
     if (!conversionResult) return;

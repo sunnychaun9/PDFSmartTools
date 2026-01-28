@@ -26,7 +26,7 @@ import { RootStackParamList, SelectedImage } from '../../navigation/types';
 import { requestImageToPdfPermissions, requestCameraPermission } from '../../utils/permissions';
 import { generatePdfFromImages, PdfGenerationResult } from '../../services/pdfGenerator';
 import { loadInterstitialAd, showInterstitialAd } from '../../services/adService';
-import { useTheme } from '../../context';
+import { useTheme, useRating } from '../../context';
 import { addRecentFile } from '../../services/recentFilesService';
 import { canUse, consume, getRemaining, FEATURES } from '../../services/usageLimitService';
 import RNFS from 'react-native-fs';
@@ -40,6 +40,7 @@ export default function ImageToPdfScreen() {
   const navigation = useNavigation<ImageToPdfNavigationProp>();
   const { isPro, navigateToUpgrade } = useProGate();
   const { theme } = useTheme();
+  const { onSuccessfulAction } = useRating();
   const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
@@ -289,6 +290,9 @@ export default function ImageToPdfScreen() {
         filePath: result.filePath,
         fileName: result.fileName,
       });
+
+      // Trigger rating prompt check
+      onSuccessfulAction();
     } catch (error) {
       setIsLoading(false);
       setErrorModal({

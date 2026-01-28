@@ -15,7 +15,7 @@ import {
   formatConfidence,
 } from '../../services/textRecognition';
 import { loadInterstitialAd, showInterstitialAd } from '../../services/adService';
-import { useTheme } from '../../context';
+import { useTheme, useRating } from '../../context';
 import { shareText } from '../../services/shareService';
 import { canUse, consume, getRemaining, FEATURES } from '../../services/usageLimitService';
 import RNFS from 'react-native-fs';
@@ -138,6 +138,7 @@ function ResultCard({
 export default function OcrScreen() {
   const { isPro, navigateToUpgrade } = useProGate();
   const { theme } = useTheme();
+  const { onSuccessfulAction } = useRating();
 
   const [selectedImage, setSelectedImage] = useState<SelectedImage | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -290,13 +291,14 @@ export default function OcrScreen() {
       await refreshRemainingUses();
 
       await showInterstitialAd(isPro);
+      onSuccessfulAction();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Text extraction failed';
       setErrorModal({ visible: true, title: 'OCR Failed', message });
     } finally {
       setIsProcessing(false);
     }
-  }, [selectedImage, isPro, refreshRemainingUses]);
+  }, [selectedImage, isPro, refreshRemainingUses, onSuccessfulAction]);
 
   const handleCopyText = useCallback(() => {
     if (!ocrResult) return;

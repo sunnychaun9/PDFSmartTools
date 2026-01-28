@@ -15,7 +15,7 @@ import {
 } from '../../services/pdfCompressor';
 import { pickPdfFile, PickedFile, cleanupPickedFile } from '../../services/filePicker';
 import { loadInterstitialAd, showInterstitialAd } from '../../services/adService';
-import { useTheme } from '../../context';
+import { useTheme, useRating } from '../../context';
 import { addRecentFile, formatFileSize } from '../../services/recentFilesService';
 import { sharePdfFile } from '../../services/shareService';
 import { canUse, consume, getRemaining, FEATURES } from '../../services/usageLimitService';
@@ -284,6 +284,7 @@ export default function CompressPdfScreen() {
   const initialFilePath = route.params?.filePath;
   const { isPro, navigateToUpgrade } = useProGate();
   const { theme } = useTheme();
+  const { onSuccessfulAction } = useRating();
 
   const [selectedFile, setSelectedFile] = useState<PickedFile | null>(null);
   const [selectedLevel, setSelectedLevel] = useState<CompressionLevel>('medium');
@@ -395,6 +396,9 @@ export default function CompressPdfScreen() {
       await refreshRemainingUses();
 
       await showInterstitialAd(isPro);
+
+      // Trigger rating prompt check
+      onSuccessfulAction();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Compression failed';
       setError(message);

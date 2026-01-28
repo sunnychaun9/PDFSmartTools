@@ -13,7 +13,7 @@ import { Button, Text, Icon, AppModal } from '../../components/ui';
 import { ProgressBar } from '../../components/feedback';
 import { useProGate, UpgradePromptModal } from '../../components/subscription';
 import { colors, spacing, borderRadius, shadows } from '../../theme';
-import { useTheme } from '../../context';
+import { useTheme, useRating } from '../../context';
 import { pickPdfFile, PickedFile, cleanupPickedFile } from '../../services/filePicker';
 import {
   splitPdf,
@@ -64,6 +64,7 @@ function FilePreviewCard({
 export default function SplitPdfScreen() {
   const { isPro, navigateToUpgrade } = useProGate();
   const { theme } = useTheme();
+  const { onSuccessfulAction } = useRating();
 
   // State
   const [selectedFile, setSelectedFile] = useState<PickedFile | null>(null);
@@ -214,6 +215,9 @@ export default function SplitPdfScreen() {
       await refreshRemainingUses();
 
       await showInterstitialAd(isPro);
+
+      // Trigger rating prompt check
+      onSuccessfulAction();
     } catch (err: any) {
       if (err?.code === 'PRO_REQUIRED') {
         setShowUpgradeModal(true);

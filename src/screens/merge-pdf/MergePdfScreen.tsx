@@ -18,7 +18,7 @@ import { Button, Text, Icon, AppModal } from '../../components/ui';
 import { UpgradePromptModal } from '../../components/subscription';
 import { colors, spacing, borderRadius, shadows } from '../../theme';
 import { RootStackParamList } from '../../navigation/types';
-import { useTheme, useSubscription } from '../../context';
+import { useTheme, useSubscription, useRating } from '../../context';
 import { pickPdfFile, cleanupPickedFile, type PickedFile } from '../../services/filePicker';
 import {
   mergePdfs,
@@ -46,6 +46,7 @@ export default function MergePdfScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { theme } = useTheme();
   const { isPro } = useSubscription();
+  const { onSuccessfulAction } = useRating();
 
   // State
   const [selectedFiles, setSelectedFiles] = useState<PdfFile[]>([]);
@@ -177,6 +178,9 @@ export default function MergePdfScreen() {
 
       // Show interstitial ad for free users
       await showInterstitialAd(isPro);
+
+      // Trigger rating prompt check
+      onSuccessfulAction();
     } catch (err) {
       setIsMerging(false);
       const message = err instanceof Error ? err.message : 'Merge failed';

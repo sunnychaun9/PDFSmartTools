@@ -21,8 +21,7 @@ import {
 } from '../../services/wordToPdfService';
 import { pickWordFile, PickedFile, cleanupPickedFile } from '../../services/filePicker';
 import { loadInterstitialAd, showInterstitialAd } from '../../services/adService';
-import { useTheme } from '../../context';
-import { useSubscription } from '../../context';
+import { useTheme, useSubscription, useRating } from '../../context';
 import { addRecentFile } from '../../services/recentFilesService';
 import { sharePdfFile } from '../../services/shareService';
 import { RootStackParamList } from '../../navigation/types';
@@ -155,6 +154,7 @@ function ResultCard({
 export default function WordToPdfScreen() {
   const { theme } = useTheme();
   const { isPro } = useSubscription();
+  const { onSuccessfulAction } = useRating();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   // File state
@@ -239,6 +239,7 @@ export default function WordToPdfScreen() {
 
       // Show ad
       await showInterstitialAd(isPro);
+      onSuccessfulAction();
     } catch (err: any) {
       const errorCode = err.code || '';
       const message = getErrorMessage(errorCode, err.message);
@@ -246,7 +247,7 @@ export default function WordToPdfScreen() {
     } finally {
       setIsConverting(false);
     }
-  }, [selectedFile, isPro]);
+  }, [selectedFile, isPro, onSuccessfulAction]);
 
   const handleSaveToDownloads = useCallback(async () => {
     if (!conversionResult || !selectedFile) return;

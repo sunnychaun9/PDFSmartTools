@@ -20,15 +20,14 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeScreen, Header, Spacer } from '../../components/layout';
 import { Button, Text, Icon, AppModal } from '../../components/ui';
 import { ProgressBar } from '../../components/feedback';
-import { useProGate, UpgradePromptModal } from '../../components/subscription';
 import { colors, spacing, borderRadius, shadows } from '../../theme';
 import { RootStackParamList, SelectedImage } from '../../navigation/types';
 import { requestImageToPdfPermissions, requestCameraPermission } from '../../utils/permissions';
 import { generatePdfFromImages, PdfGenerationResult } from '../../services/pdfGenerator';
 import { loadInterstitialAd, showInterstitialAd } from '../../services/adService';
-import { useTheme, useRating } from '../../context';
+import { useTheme, useRating, useFeatureGate } from '../../context';
 import { addRecentFile } from '../../services/recentFilesService';
-import { canUse, consume, getRemaining, FEATURES } from '../../services/usageLimitService';
+import { getRemaining, FEATURES } from '../../services/usageLimitService';
 import RNFS from 'react-native-fs';
 
 type ImageToPdfNavigationProp = NativeStackNavigationProp<RootStackParamList, 'ImageToPdf'>;
@@ -38,9 +37,11 @@ const IMAGE_SIZE = (SCREEN_WIDTH - spacing.lg * 2 - spacing.sm * 2) / 3;
 
 export default function ImageToPdfScreen() {
   const navigation = useNavigation<ImageToPdfNavigationProp>();
-  const { isPro, navigateToUpgrade } = useProGate();
+  // Future: replace ad gate with Pro subscription
+  const isPro = false; // Subscriptions disabled
   const { theme } = useTheme();
   const { onSuccessfulAction } = useRating();
+  const { canProceedWithFeature, consumeFeatureUse } = useFeatureGate();
   const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingProgress, setLoadingProgress] = useState(0);
@@ -49,7 +50,6 @@ export default function ImageToPdfScreen() {
   const [showAddOptions, setShowAddOptions] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [remainingUses, setRemainingUses] = useState<number>(Infinity);
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   // Modal states
   const [permissionModal, setPermissionModal] = useState<{
@@ -224,10 +224,10 @@ export default function ImageToPdfScreen() {
       return;
     }
 
-    // Check usage limit before proceeding
-    const allowed = await canUse(FEATURES.IMAGE_TO_PDF, isPro);
+    // Future: replace ad gate with Pro subscription
+    // Check usage limit - shows ad gate modal if limit exceeded
+    const allowed = await canProceedWithFeature(FEATURES.IMAGE_TO_PDF, isPro);
     if (!allowed) {
-      setShowUpgradeModal(true);
       return;
     }
 
@@ -275,8 +275,8 @@ export default function ImageToPdfScreen() {
       // Add to recent files
       await addRecentFile(result.fileName, result.filePath, fileSize, 'created');
 
-      // Consume one usage after successful PDF creation
-      await consume(FEATURES.IMAGE_TO_PDF, isPro);
+      // Consume one usage ONLY after successful PDF creation
+      await consumeFeatureUse(FEATURES.IMAGE_TO_PDF, isPro);
       await refreshRemainingUses();
 
       await new Promise<void>((resolve) => setTimeout(resolve, 500));
@@ -300,7 +300,7 @@ export default function ImageToPdfScreen() {
         message: `Failed to generate PDF: ${error instanceof Error ? error.message : 'Unknown error'}`,
       });
     }
-  }, [selectedImages, navigation, isPro, navigateToUpgrade, refreshRemainingUses]);
+  }, [selectedImages, isPro, refreshRemainingUses, canProceedWithFeature, consumeFeatureUse, onSuccessfulAction]);
 
   const renderItem = useCallback(
     ({ item, drag, isActive, getIndex }: RenderItemParams<SelectedImage>) => {
@@ -619,17 +619,6 @@ export default function ImageToPdfScreen() {
         {renderImagePreviewModal()}
         {renderAddOptionsSheet()}
         {renderLoadingOverlay()}
-
-        <UpgradePromptModal
-          visible={showUpgradeModal}
-          title="Daily Limit Reached"
-          message="You have used all your free Image to PDF conversions for today. Upgrade to Pro for unlimited access."
-          onUpgrade={() => {
-            setShowUpgradeModal(false);
-            navigateToUpgrade();
-          }}
-          onCancel={() => setShowUpgradeModal(false)}
-        />
 
         {/* Permission Modal */}
         <AppModal

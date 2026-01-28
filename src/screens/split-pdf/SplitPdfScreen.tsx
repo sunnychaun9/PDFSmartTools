@@ -11,16 +11,14 @@ import {
 import { SafeScreen, Header, Spacer } from '../../components/layout';
 import { Button, Text, Icon, AppModal } from '../../components/ui';
 import { ProgressBar } from '../../components/feedback';
-import { useProGate, UpgradePromptModal } from '../../components/subscription';
 import { colors, spacing, borderRadius, shadows } from '../../theme';
-import { useTheme, useRating } from '../../context';
+import { useTheme, useRating, useFeatureGate } from '../../context';
 import { pickPdfFile, PickedFile, cleanupPickedFile } from '../../services/filePicker';
 import {
   splitPdf,
   getPageCount,
   parseRangeInput,
   validateRange,
-  rangesExceedFreeLimit,
   moveSplitFilesToDownloads,
   cleanupSplitFiles,
   SplitResult,
@@ -28,7 +26,7 @@ import {
 } from '../../services/pdfSplitter';
 import { sharePdfFile } from '../../services/shareService';
 import { loadInterstitialAd, showInterstitialAd } from '../../services/adService';
-import { canUse, consume, getRemaining, FEATURES } from '../../services/usageLimitService';
+import { getRemaining, FEATURES } from '../../services/usageLimitService';
 
 type SplitMode = 'range' | 'individual';
 
@@ -62,9 +60,11 @@ function FilePreviewCard({
 }
 
 export default function SplitPdfScreen() {
-  const { isPro, navigateToUpgrade } = useProGate();
+  // Future: replace ad gate with Pro subscription
+  const isPro = false; // Subscriptions disabled
   const { theme } = useTheme();
   const { onSuccessfulAction } = useRating();
+  const { canProceedWithFeature, consumeFeatureUse } = useFeatureGate();
 
   // State
   const [selectedFile, setSelectedFile] = useState<PickedFile | null>(null);
@@ -77,7 +77,6 @@ export default function SplitPdfScreen() {
   const [progressText, setProgressText] = useState('');
   const [splitResult, setSplitResult] = useState<SplitResult | null>(null);
   const [remainingUses, setRemainingUses] = useState<number>(Infinity);
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   // Modal states
   const [errorModal, setErrorModal] = useState<{
@@ -179,16 +178,10 @@ export default function SplitPdfScreen() {
       }
     }
 
-    // Check Pro requirement for pages > 2
-    if (!isPro && rangesExceedFreeLimit(ranges)) {
-      setShowUpgradeModal(true);
-      return;
-    }
-
-    // Check usage limit
-    const allowed = await canUse(FEATURES.PDF_SPLIT, isPro);
+    // Future: replace ad gate with Pro subscription
+    // Check usage limit - shows ad gate modal if limit exceeded
+    const allowed = await canProceedWithFeature(FEATURES.PDF_SPLIT, isPro);
     if (!allowed) {
-      setShowUpgradeModal(true);
       return;
     }
 
@@ -210,8 +203,8 @@ export default function SplitPdfScreen() {
 
       setSplitResult(result);
 
-      // Consume usage after successful split
-      await consume(FEATURES.PDF_SPLIT, isPro);
+      // Consume usage ONLY after successful split
+      await consumeFeatureUse(FEATURES.PDF_SPLIT, isPro);
       await refreshRemainingUses();
 
       await showInterstitialAd(isPro);
@@ -219,16 +212,12 @@ export default function SplitPdfScreen() {
       // Trigger rating prompt check
       onSuccessfulAction();
     } catch (err: any) {
-      if (err?.code === 'PRO_REQUIRED') {
-        setShowUpgradeModal(true);
-      } else {
-        const message = err instanceof Error ? err.message : 'Splitting failed';
-        setErrorModal({ visible: true, title: 'Split Failed', message });
-      }
+      const message = err instanceof Error ? err.message : 'Splitting failed';
+      setErrorModal({ visible: true, title: 'Split Failed', message });
     } finally {
       setIsSplitting(false);
     }
-  }, [selectedFile, splitMode, rangeInput, selectedPages, pageCount, isPro, refreshRemainingUses]);
+  }, [selectedFile, splitMode, rangeInput, selectedPages, pageCount, isPro, refreshRemainingUses, canProceedWithFeature, consumeFeatureUse, onSuccessfulAction]);
 
   const handleSaveToDownloads = useCallback(async () => {
     if (!splitResult) return;
@@ -295,13 +284,6 @@ export default function SplitPdfScreen() {
             onPress={handleSelectFile}
             leftIcon={<Icon name="file-plus" size={20} color={colors.textOnPrimary} />}
           />
-          {!isPro && (
-            <View style={styles.freeUserNotice}>
-              <Text variant="caption" style={{ color: theme.textTertiary }}>
-                Free users can split first 2 pages only
-              </Text>
-            </View>
-          )}
         </Animated.View>
 
         <AppModal
@@ -517,7 +499,6 @@ export default function SplitPdfScreen() {
             <View style={styles.pageGrid}>
               {Array.from({ length: pageCount }, (_, i) => i + 1).map((page) => {
                 const isSelected = selectedPages.has(page);
-                const isLocked = !isPro && page > 2;
 
                 return (
                   <Pressable
@@ -525,22 +506,11 @@ export default function SplitPdfScreen() {
                     style={[
                       styles.pageButton,
                       {
-                        backgroundColor: isSelected
-                          ? colors.splitPdf
-                          : isLocked
-                          ? theme.surfaceVariant
-                          : theme.surface,
+                        backgroundColor: isSelected ? colors.splitPdf : theme.surface,
                         borderColor: isSelected ? colors.splitPdf : theme.border,
-                        opacity: isLocked ? 0.5 : 1,
                       },
                     ]}
-                    onPress={() => {
-                      if (isLocked) {
-                        setShowUpgradeModal(true);
-                      } else {
-                        handleTogglePage(page);
-                      }
-                    }}
+                    onPress={() => handleTogglePage(page)}
                     disabled={isSplitting}
                   >
                     <Text
@@ -552,11 +522,6 @@ export default function SplitPdfScreen() {
                     >
                       {page}
                     </Text>
-                    {isLocked && (
-                      <View style={styles.lockBadge}>
-                        <Icon name="crown" size={10} color={colors.proPlan} />
-                      </View>
-                    )}
                   </Pressable>
                 );
               })}
@@ -573,19 +538,6 @@ export default function SplitPdfScreen() {
         )}
 
         <Spacer size="lg" />
-
-        {/* Pro info */}
-        {!isPro && (
-          <View style={[styles.infoCard, { backgroundColor: colors.warningLight }]}>
-            <Icon name="info" size={20} color={colors.warning} />
-            <Text
-              variant="bodySmall"
-              style={{ color: colors.warningDark, marginLeft: spacing.sm, flex: 1 }}
-            >
-              Free users can only split the first 2 pages. Upgrade to Pro for unlimited access.
-            </Text>
-          </View>
-        )}
 
         {/* Progress */}
         {isSplitting && (
@@ -640,21 +592,6 @@ export default function SplitPdfScreen() {
           }
         />
       </View>
-
-      <UpgradePromptModal
-        visible={showUpgradeModal}
-        title={!isPro && rangesExceedFreeLimit(splitMode === 'range' ? parseRangeInput(rangeInput) : Array.from(selectedPages).map(String))
-          ? 'Pro Feature'
-          : 'Daily Limit Reached'}
-        message={!isPro && rangesExceedFreeLimit(splitMode === 'range' ? parseRangeInput(rangeInput) : Array.from(selectedPages).map(String))
-          ? 'Free users can only split the first 2 pages. Upgrade to Pro for unlimited PDF splitting.'
-          : 'You have used your free PDF split for today. Upgrade to Pro for unlimited access.'}
-        onUpgrade={() => {
-          setShowUpgradeModal(false);
-          navigateToUpgrade();
-        }}
-        onCancel={() => setShowUpgradeModal(false)}
-      />
 
       <AppModal
         visible={errorModal.visible}
@@ -752,18 +689,6 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: borderRadius.md,
     borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  lockBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: colors.warningLight,
     alignItems: 'center',
     justifyContent: 'center',
   },

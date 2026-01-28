@@ -15,10 +15,9 @@ import DraggableFlatList, {
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeScreen, Header, Spacer } from '../../components/layout';
 import { Button, Text, Icon, AppModal } from '../../components/ui';
-import { UpgradePromptModal } from '../../components/subscription';
 import { colors, spacing, borderRadius, shadows } from '../../theme';
 import { RootStackParamList } from '../../navigation/types';
-import { useTheme, useSubscription, useRating } from '../../context';
+import { useTheme, useRating, useFeatureGate } from '../../context';
 import { pickPdfFile, cleanupPickedFile, type PickedFile } from '../../services/filePicker';
 import {
   mergePdfs,
@@ -28,12 +27,7 @@ import {
   type PdfFileInfo,
 } from '../../services/pdfMerger';
 import { sharePdfFile } from '../../services/shareService';
-import {
-  canUse,
-  consume,
-  getRemaining,
-  FEATURES,
-} from '../../services/usageLimitService';
+import { getRemaining, FEATURES } from '../../services/usageLimitService';
 import { addRecentFile } from '../../services/recentFilesService';
 import { showInterstitialAd } from '../../services/adService';
 
@@ -45,8 +39,10 @@ type PdfFile = PickedFile & {
 export default function MergePdfScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { theme } = useTheme();
-  const { isPro } = useSubscription();
+  // Future: replace ad gate with Pro subscription
+  const isPro = false; // Subscriptions disabled
   const { onSuccessfulAction } = useRating();
+  const { canProceedWithFeature, consumeFeatureUse } = useFeatureGate();
 
   // State
   const [selectedFiles, setSelectedFiles] = useState<PdfFile[]>([]);
@@ -55,7 +51,6 @@ export default function MergePdfScreen() {
   const [progressText, setProgressText] = useState('');
   const [mergeResult, setMergeResult] = useState<MergeResult | null>(null);
   const [remainingUses, setRemainingUses] = useState<number>(Infinity);
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   // Modal states
   const [errorModal, setErrorModal] = useState<{
@@ -89,10 +84,6 @@ export default function MergePdfScreen() {
   useEffect(() => {
     refreshRemainingUses();
   }, [refreshRemainingUses]);
-
-  const navigateToUpgrade = useCallback(() => {
-    navigation.navigate('Pro');
-  }, [navigation]);
 
   const handleSelectFile = useCallback(async () => {
     try {
@@ -143,10 +134,10 @@ export default function MergePdfScreen() {
       return;
     }
 
-    // Check usage limit
-    const allowed = await canUse(FEATURES.PDF_MERGE, isPro);
+    // Future: replace ad gate with Pro subscription
+    // Check usage limit - shows ad gate modal if limit exceeded
+    const allowed = await canProceedWithFeature(FEATURES.PDF_MERGE, isPro);
     if (!allowed) {
-      setShowUpgradeModal(true);
       return;
     }
 
@@ -165,8 +156,8 @@ export default function MergePdfScreen() {
         },
       });
 
-      // Consume usage only after successful merge
-      await consume(FEATURES.PDF_MERGE, isPro);
+      // Consume usage ONLY after successful merge
+      await consumeFeatureUse(FEATURES.PDF_MERGE, isPro);
       await refreshRemainingUses();
 
       // Add to recent files
@@ -186,7 +177,7 @@ export default function MergePdfScreen() {
       const message = err instanceof Error ? err.message : 'Merge failed';
       setErrorModal({ visible: true, title: 'Merge Failed', message });
     }
-  }, [selectedFiles, isPro, refreshRemainingUses]);
+  }, [selectedFiles, isPro, refreshRemainingUses, canProceedWithFeature, consumeFeatureUse, onSuccessfulAction]);
 
   const handleSaveToDownloads = useCallback(async () => {
     if (!mergeResult) return;
@@ -427,17 +418,6 @@ export default function MergePdfScreen() {
             )}
           </Animated.View>
 
-          <UpgradePromptModal
-            visible={showUpgradeModal}
-            title="Daily Limit Reached"
-            message="You have used all your free PDF merges for today. Upgrade to Pro for unlimited access."
-            onUpgrade={() => {
-              setShowUpgradeModal(false);
-              navigateToUpgrade();
-            }}
-            onCancel={() => setShowUpgradeModal(false)}
-          />
-
           <AppModal
             visible={errorModal.visible}
             type="error"
@@ -535,17 +515,6 @@ export default function MergePdfScreen() {
             </View>
           )}
         </View>
-
-        <UpgradePromptModal
-          visible={showUpgradeModal}
-          title="Daily Limit Reached"
-          message="You have used all your free PDF merges for today. Upgrade to Pro for unlimited access."
-          onUpgrade={() => {
-            setShowUpgradeModal(false);
-            navigateToUpgrade();
-          }}
-          onCancel={() => setShowUpgradeModal(false)}
-        />
 
         <AppModal
           visible={minFilesModal}

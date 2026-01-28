@@ -18,7 +18,8 @@ export type AppModalType = 'success' | 'error' | 'warning' | 'info' | 'confirm';
 type AppModalButton = {
   text: string;
   onPress: () => void;
-  variant?: 'primary' | 'secondary' | 'destructive';
+  variant?: 'primary' | 'secondary' | 'destructive' | 'ghost';
+  disabled?: boolean;
 };
 
 type AppModalProps = {
@@ -58,15 +59,20 @@ export default function AppModal({
     onClose?.();
   };
 
-  const getButtonStyle = (variant: AppModalButton['variant'] = 'secondary') => {
-    switch (variant) {
-      case 'primary':
-        return [styles.button, styles.primaryButton, { backgroundColor: colors.primary }];
-      case 'destructive':
-        return [styles.button, styles.destructiveButton, { backgroundColor: colors.error }];
-      default:
-        return [styles.button, styles.secondaryButton, { borderColor: theme.border }];
-    }
+  const getButtonStyle = (variant: AppModalButton['variant'] = 'secondary', disabled?: boolean) => {
+    const baseStyle = (() => {
+      switch (variant) {
+        case 'primary':
+          return [styles.button, styles.primaryButton, { backgroundColor: colors.primary }];
+        case 'destructive':
+          return [styles.button, styles.destructiveButton, { backgroundColor: colors.error }];
+        case 'ghost':
+          return [styles.button, styles.ghostButton];
+        default:
+          return [styles.button, styles.secondaryButton, { borderColor: theme.border }];
+      }
+    })();
+    return disabled ? [...baseStyle, { opacity: 0.5 }] : baseStyle;
   };
 
   const getButtonTextStyle = (variant: AppModalButton['variant'] = 'secondary') => {
@@ -74,6 +80,8 @@ export default function AppModal({
       case 'primary':
       case 'destructive':
         return { color: colors.textOnPrimary, fontWeight: '600' as const };
+      case 'ghost':
+        return { color: theme.textTertiary, fontWeight: '500' as const };
       default:
         return { color: theme.textSecondary, fontWeight: '500' as const };
     }
@@ -119,11 +127,19 @@ export default function AppModal({
             {buttons.map((button, index) => (
               <Pressable
                 key={index}
-                style={getButtonStyle(button.variant)}
-                onPress={button.onPress}
-                android_ripple={{
-                  color: button.variant === 'secondary' ? theme.ripple : 'rgba(255,255,255,0.2)',
-                }}
+                style={getButtonStyle(button.variant, button.disabled)}
+                onPress={button.disabled ? undefined : button.onPress}
+                disabled={button.disabled}
+                android_ripple={
+                  button.disabled
+                    ? undefined
+                    : {
+                        color:
+                          button.variant === 'secondary' || button.variant === 'ghost'
+                            ? theme.ripple
+                            : 'rgba(255,255,255,0.2)',
+                      }
+                }
               >
                 <Text variant="body" style={getButtonTextStyle(button.variant)}>
                   {button.text}
@@ -191,4 +207,5 @@ const styles = StyleSheet.create({
   secondaryButton: {
     borderWidth: 1,
   },
+  ghostButton: {},
 });

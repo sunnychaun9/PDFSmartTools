@@ -4,7 +4,6 @@ import { useRoute, RouteProp } from '@react-navigation/native';
 import { SafeScreen, Header, Spacer } from '../../components/layout';
 import { Button, Text, Icon, Card, AppModal } from '../../components/ui';
 import { ProgressBar } from '../../components/feedback';
-import { useProGate, UpgradePromptModal } from '../../components/subscription';
 import { colors, spacing, borderRadius, shadows } from '../../theme';
 import { RootStackParamList } from '../../navigation/types';
 import {
@@ -15,10 +14,10 @@ import {
 } from '../../services/pdfCompressor';
 import { pickPdfFile, PickedFile, cleanupPickedFile } from '../../services/filePicker';
 import { loadInterstitialAd, showInterstitialAd } from '../../services/adService';
-import { useTheme, useRating } from '../../context';
+import { useTheme, useRating, useFeatureGate } from '../../context';
 import { addRecentFile, formatFileSize } from '../../services/recentFilesService';
 import { sharePdfFile } from '../../services/shareService';
-import { canUse, consume, getRemaining, FEATURES } from '../../services/usageLimitService';
+import { getRemaining, FEATURES } from '../../services/usageLimitService';
 import RNFS from 'react-native-fs';
 
 type CompressPdfRouteProp = RouteProp<RootStackParamList, 'CompressPdf'>;
@@ -282,9 +281,11 @@ function ResultCard({
 export default function CompressPdfScreen() {
   const route = useRoute<CompressPdfRouteProp>();
   const initialFilePath = route.params?.filePath;
-  const { isPro, navigateToUpgrade } = useProGate();
+  // Future: replace ad gate with Pro subscription
+  const isPro = false; // Subscriptions disabled
   const { theme } = useTheme();
   const { onSuccessfulAction } = useRating();
+  const { canProceedWithFeature, consumeFeatureUse } = useFeatureGate();
 
   const [selectedFile, setSelectedFile] = useState<PickedFile | null>(null);
   const [selectedLevel, setSelectedLevel] = useState<CompressionLevel>('medium');
@@ -294,7 +295,6 @@ export default function CompressPdfScreen() {
   const [compressionResult, setCompressionResult] = useState<CompressionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [remainingUses, setRemainingUses] = useState<number>(Infinity);
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   // Modal states
   const [errorModal, setErrorModal] = useState<{
@@ -347,10 +347,10 @@ export default function CompressPdfScreen() {
       return;
     }
 
-    // Check usage limit before proceeding
-    const allowed = await canUse(FEATURES.PDF_COMPRESS, isPro);
+    // Future: replace ad gate with Pro subscription
+    // Check usage limit - shows ad gate modal if limit exceeded
+    const allowed = await canProceedWithFeature(FEATURES.PDF_COMPRESS, isPro);
     if (!allowed) {
-      setShowUpgradeModal(true);
       return;
     }
 
@@ -391,8 +391,8 @@ export default function CompressPdfScreen() {
         'compressed'
       );
 
-      // Consume one usage after successful compression
-      await consume(FEATURES.PDF_COMPRESS, isPro);
+      // Consume one usage ONLY after successful compression
+      await consumeFeatureUse(FEATURES.PDF_COMPRESS, isPro);
       await refreshRemainingUses();
 
       await showInterstitialAd(isPro);
@@ -406,7 +406,7 @@ export default function CompressPdfScreen() {
     } finally {
       setIsCompressing(false);
     }
-  }, [selectedFile, selectedLevel, isPro, navigateToUpgrade, refreshRemainingUses]);
+  }, [selectedFile, selectedLevel, isPro, refreshRemainingUses, canProceedWithFeature, consumeFeatureUse, onSuccessfulAction]);
 
   const handleSaveToDownloads = useCallback(async () => {
     if (!compressionResult) return;
@@ -466,17 +466,6 @@ export default function CompressPdfScreen() {
           />
         </Animated.View>
 
-        <UpgradePromptModal
-          visible={showUpgradeModal}
-          title="Daily Limit Reached"
-          message="You have used all your free PDF compressions for today. Upgrade to Pro for unlimited access."
-          onUpgrade={() => {
-            setShowUpgradeModal(false);
-            navigateToUpgrade();
-          }}
-          onCancel={() => setShowUpgradeModal(false)}
-        />
-
         <AppModal
           visible={errorModal.visible}
           type="error"
@@ -515,17 +504,6 @@ export default function CompressPdfScreen() {
             fullWidth
           />
         </View>
-
-        <UpgradePromptModal
-          visible={showUpgradeModal}
-          title="Daily Limit Reached"
-          message="You have used all your free PDF compressions for today. Upgrade to Pro for unlimited access."
-          onUpgrade={() => {
-            setShowUpgradeModal(false);
-            navigateToUpgrade();
-          }}
-          onCancel={() => setShowUpgradeModal(false)}
-        />
 
         <AppModal
           visible={successModal.visible}
@@ -644,17 +622,6 @@ export default function CompressPdfScreen() {
           }
         />
       </View>
-
-      <UpgradePromptModal
-        visible={showUpgradeModal}
-        title="Daily Limit Reached"
-        message="You have used all your free PDF compressions for today. Upgrade to Pro for unlimited access."
-        onUpgrade={() => {
-          setShowUpgradeModal(false);
-          navigateToUpgrade();
-        }}
-        onCancel={() => setShowUpgradeModal(false)}
-      />
 
       <AppModal
         visible={noFileModal}

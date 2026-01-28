@@ -3,7 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StyleSheet, StatusBar, Platform } from 'react-native';
-import { SubscriptionProvider, ThemeProvider, useTheme, useSubscription, RatingProvider, useRating } from '../context';
+import { SubscriptionProvider, ThemeProvider, useTheme, useSubscription, RatingProvider, useRating, FeatureGateProvider } from '../context';
 import { colors } from '../theme';
 import { AppModal } from '../components/ui';
 import {
@@ -276,7 +276,10 @@ function AppContent({ children }: { children: React.ReactNode }) {
           },
         }}
       >
-        {children}
+        {/* Future: replace ad gate with Pro subscription */}
+        <FeatureGateProvider>
+          {children}
+        </FeatureGateProvider>
         <SubscriptionNotificationHandler />
         <InAppUpdateHandler />
         <RatingModalHandler />

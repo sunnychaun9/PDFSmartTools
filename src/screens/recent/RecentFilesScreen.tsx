@@ -14,6 +14,7 @@ import { Text, Icon, Button, AppModal } from '../../components/ui';
 import { colors, spacing, borderRadius, shadows } from '../../theme';
 import { RootStackParamList } from '../../navigation/types';
 import { useTheme } from '../../context';
+import RNFS from 'react-native-fs';
 import {
   getRecentFiles,
   removeRecentFile,
@@ -155,6 +156,10 @@ export default function RecentFilesScreen() {
     visible: boolean;
     file: RecentFile | null;
   }>({ visible: false, file: null });
+  const [fileNotFoundModal, setFileNotFoundModal] = useState<{
+    visible: boolean;
+    file: RecentFile | null;
+  }>({ visible: false, file: null });
   const [clearAllModal, setClearAllModal] = useState(false);
 
   // Animation
@@ -196,7 +201,31 @@ export default function RecentFilesScreen() {
   };
 
   const handleFilePress = useCallback(
-    (file: RecentFile) => {
+    async (file: RecentFile) => {
+      // Validate file path exists
+      if (!file.path) {
+        setFileNotFoundModal({
+          visible: true,
+          file: file,
+        });
+        return;
+      }
+
+      // Check if file still exists on disk
+      try {
+        const exists = await RNFS.exists(file.path);
+        if (!exists) {
+          // File was deleted externally, prompt to remove from recent
+          setFileNotFoundModal({
+            visible: true,
+            file: file,
+          });
+          return;
+        }
+      } catch {
+        // If we can't check, try opening anyway
+      }
+
       navigation.navigate('PdfViewer', {
         filePath: file.path,
         title: file.name,
@@ -225,6 +254,13 @@ export default function RecentFilesScreen() {
       await handleDeleteFile(deleteModal.file.id);
     }
     setDeleteModal({ visible: false, file: null });
+  };
+
+  const handleConfirmRemoveMissing = async () => {
+    if (fileNotFoundModal.file) {
+      await handleDeleteFile(fileNotFoundModal.file.id);
+    }
+    setFileNotFoundModal({ visible: false, file: null });
   };
 
   const renderItem = useCallback(
@@ -366,6 +402,27 @@ export default function RecentFilesScreen() {
             text: 'Cancel',
             variant: 'secondary',
             onPress: () => setClearAllModal(false),
+          },
+        ]}
+      />
+
+      {/* File Not Found Modal */}
+      <AppModal
+        visible={fileNotFoundModal.visible}
+        type="warning"
+        title="File Not Found"
+        message={`The file "${fileNotFoundModal.file?.name}" no longer exists. It may have been deleted or moved. Would you like to remove it from your recent files?`}
+        onClose={() => setFileNotFoundModal({ visible: false, file: null })}
+        buttons={[
+          {
+            text: 'Remove',
+            variant: 'primary',
+            onPress: handleConfirmRemoveMissing,
+          },
+          {
+            text: 'Cancel',
+            variant: 'secondary',
+            onPress: () => setFileNotFoundModal({ visible: false, file: null }),
           },
         ]}
       />

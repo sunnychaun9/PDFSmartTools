@@ -56,7 +56,6 @@ type ThemeProviderProps = {
 export function ThemeProvider({ children }: ThemeProviderProps) {
   const systemColorScheme = useColorScheme();
   const [themeMode, setThemeModeState] = useState<ThemeMode>('system');
-  const [isLoaded, setIsLoaded] = useState(false);
 
   // Load saved theme preference
   useEffect(() => {
@@ -68,8 +67,6 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
         }
       } catch (error) {
         console.warn('Failed to load theme preference:', error);
-      } finally {
-        setIsLoaded(true);
       }
     }
     loadTheme();
@@ -146,11 +143,6 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
     }),
     [isDark, themeMode, setThemeMode, toggleTheme, theme]
   );
-
-  // Don't render until theme is loaded to prevent flash
-  if (!isLoaded) {
-    return null;
-  }
 
   return (
     <ThemeContext.Provider value={value}>

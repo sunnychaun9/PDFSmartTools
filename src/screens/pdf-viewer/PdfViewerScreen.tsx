@@ -388,7 +388,7 @@ export default function PdfViewerScreen() {
   // PDF source configuration optimized for Android
   const pdfSource = useMemo(
     () => ({
-      uri: filePath.startsWith('file://') ? filePath : `file://${filePath}`,
+      uri: filePath && filePath.startsWith('file://') ? filePath : `file://${filePath || ''}`,
       cache: true,
     }),
     [filePath]

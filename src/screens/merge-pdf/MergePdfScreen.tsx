@@ -170,12 +170,7 @@ export default function MergePdfScreen() {
 
       // Add to recent files
       const fileName = `merged_${Date.now()}.pdf`;
-      await addRecentFile({
-        name: fileName,
-        path: result.outputPath,
-        size: result.outputSize,
-        type: 'created',
-      });
+      await addRecentFile(fileName, result.outputPath, result.outputSize, 'created');
 
       setMergeResult(result);
       setIsMerging(false);

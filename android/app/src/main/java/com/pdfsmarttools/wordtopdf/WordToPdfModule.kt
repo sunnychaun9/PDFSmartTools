@@ -11,7 +11,6 @@ import com.tom_roush.pdfbox.pdmodel.PDPage
 import com.tom_roush.pdfbox.pdmodel.PDPageContentStream
 import com.tom_roush.pdfbox.pdmodel.common.PDRectangle
 import com.tom_roush.pdfbox.pdmodel.font.PDType1Font
-import com.tom_roush.pdfbox.pdmodel.font.Standard14Fonts
 import com.tom_roush.pdfbox.pdmodel.graphics.image.LosslessFactory
 import kotlinx.coroutines.*
 import org.apache.poi.hwpf.HWPFDocument
@@ -194,9 +193,9 @@ class WordToPdfModule(private val reactContext: ReactApplicationContext) :
                             }
 
                             val font = when {
-                                element.runs.any { it.isBold } -> PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD)
-                                element.runs.any { it.isItalic } -> PDType1Font(Standard14Fonts.FontName.HELVETICA_OBLIQUE)
-                                else -> PDType1Font(Standard14Fonts.FontName.HELVETICA)
+                                element.runs.any { it.isBold } -> PDType1Font.HELVETICA_BOLD
+                                element.runs.any { it.isItalic } -> PDType1Font.HELVETICA_OBLIQUE
+                                else -> PDType1Font.HELVETICA
                             }
 
                             // Write text with word wrapping
@@ -254,7 +253,7 @@ class WordToPdfModule(private val reactContext: ReactApplicationContext) :
                                     yPosition = PAGE_HEIGHT - MARGIN
                                 }
 
-                                val font = PDType1Font(Standard14Fonts.FontName.HELVETICA)
+                                val font = PDType1Font.HELVETICA
                                 val lines = wrapText(rowText, font, FONT_SIZE, PAGE_WIDTH - 2 * MARGIN)
                                 for (line in lines) {
                                     contentStream?.setFont(font, FONT_SIZE)
@@ -321,7 +320,7 @@ class WordToPdfModule(private val reactContext: ReactApplicationContext) :
                         yPosition = PAGE_HEIGHT - MARGIN
                     }
 
-                    val font = PDType1Font(Standard14Fonts.FontName.HELVETICA)
+                    val font = PDType1Font.HELVETICA
                     val lines = wrapText(text, font, FONT_SIZE, PAGE_WIDTH - 2 * MARGIN)
 
                     for (line in lines) {

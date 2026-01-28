@@ -417,7 +417,7 @@ export default function HomeScreen() {
           <View style={styles.statsContent}>
             <View style={styles.statItem}>
               <Text style={[styles.statValue, { color: colors.textOnPrimary }]}>
-                12
+                11
               </Text>
               <Text style={[styles.statLabel, { color: isDark ? theme.textSecondary : 'rgba(255,255,255,0.8)' }]}>
                 Tools

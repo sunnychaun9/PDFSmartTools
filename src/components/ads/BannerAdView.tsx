@@ -3,10 +3,10 @@ import { View, StyleSheet } from 'react-native';
 import {
   BannerAd,
   BannerAdSize,
-  TestIds,
 } from 'react-native-google-mobile-ads';
 import { colors, spacing } from '../../theme';
 import { useSubscription } from '../../context';
+import { AD_UNIT_IDS } from '../../services/adService';
 
 type BannerAdViewProps = {
   size?: BannerAdSize;
@@ -49,7 +49,7 @@ export default function BannerAdView({
   return (
     <View style={[styles.container, !isLoaded && styles.loading, style]}>
       <BannerAd
-        unitId={TestIds.BANNER}
+        unitId={AD_UNIT_IDS.BANNER}
         size={size}
         requestOptions={{
           requestNonPersonalizedAdsOnly: true,

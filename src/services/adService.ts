@@ -4,11 +4,16 @@ import {
   TestIds,
 } from 'react-native-google-mobile-ads';
 
-// Use test ad unit IDs during development
-// Replace with your actual ad unit IDs for production
+// Production Ad Unit IDs
+const PRODUCTION_AD_UNIT_IDS = {
+  BANNER: 'ca-app-pub-2002876774760881/9314442021',
+  INTERSTITIAL: 'ca-app-pub-2002876774760881/9314442021',
+};
+
+// Use test IDs in development, production IDs in release builds
 const AD_UNIT_IDS = {
-  BANNER: TestIds.BANNER,
-  INTERSTITIAL: TestIds.INTERSTITIAL,
+  BANNER: __DEV__ ? TestIds.BANNER : PRODUCTION_AD_UNIT_IDS.BANNER,
+  INTERSTITIAL: __DEV__ ? TestIds.INTERSTITIAL : PRODUCTION_AD_UNIT_IDS.INTERSTITIAL,
 };
 
 export { AD_UNIT_IDS };

@@ -95,6 +95,12 @@ export default function PdfViewerScreen() {
     message: string;
   }>({ visible: false, message: '' });
 
+  // Password protection state
+  const [pdfPassword, setPdfPassword] = useState<string>('');
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+
   // Current theme based on dark mode
   const theme = isDarkMode ? DARK_THEME : LIGHT_THEME;
 
@@ -233,12 +239,46 @@ export default function PdfViewerScreen() {
 
   const handleError = useCallback((err: object) => {
     setIsLoading(false);
-    setError('Failed to load PDF. The file may be corrupted or unsupported.');
+    const errorString = JSON.stringify(err).toLowerCase();
     console.error('PDF Error:', err);
-  }, []);
+
+    // Check if error is due to password protection
+    if (
+      errorString.includes('password') ||
+      errorString.includes('encrypted') ||
+      errorString.includes('decrypt')
+    ) {
+      // Show password prompt
+      setShowPasswordModal(true);
+      setPasswordError(pdfPassword ? 'Incorrect password. Please try again.' : null);
+      setError(null);
+    } else {
+      setError('Failed to load PDF. The file may be corrupted or unsupported.');
+    }
+  }, [pdfPassword]);
 
   const handleLoadProgress = useCallback((percent: number) => {
     setLoadingProgress(percent);
+  }, []);
+
+  // Handle password submission for protected PDFs
+  const handlePasswordSubmit = useCallback(() => {
+    if (!passwordInput.trim()) {
+      setPasswordError('Please enter a password');
+      return;
+    }
+    setPasswordError(null);
+    setPdfPassword(passwordInput);
+    setShowPasswordModal(false);
+    setIsLoading(true);
+    setError(null);
+  }, [passwordInput]);
+
+  const handlePasswordCancel = useCallback(() => {
+    setShowPasswordModal(false);
+    setPasswordInput('');
+    setPasswordError(null);
+    setError('This PDF is password protected.');
   }, []);
 
   const handleScaleChanged = useCallback(
@@ -630,8 +670,10 @@ export default function PdfViewerScreen() {
       {/* PDF View */}
       <View style={styles.pdfContainer}>
         <Pdf
+          key={`pdf-${pdfPassword}`}
           ref={pdfRef}
           source={pdfSource}
+          password={pdfPassword || undefined}
           style={[styles.pdf, dynamicStyles.pdf]}
           minScale={MIN_SCALE}
           maxScale={MAX_SCALE}
@@ -833,6 +875,74 @@ export default function PdfViewerScreen() {
           },
         ]}
       />
+
+      {/* Password Modal for protected PDFs */}
+      <Modal
+        visible={showPasswordModal}
+        transparent
+        animationType="fade"
+        onRequestClose={handlePasswordCancel}
+      >
+        <Pressable style={styles.modalOverlay} onPress={handlePasswordCancel}>
+          <Pressable
+            style={[styles.passwordModalContainer, { backgroundColor: theme.surface }]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.passwordModalIcon}>
+              <Icon name="lock" size={32} color={colors.primary} />
+            </View>
+            <Spacer size="md" />
+            <Text variant="h3" align="center" customColor={theme.text}>
+              Password Protected
+            </Text>
+            <Spacer size="sm" />
+            <Text variant="body" align="center" customColor={theme.textSecondary}>
+              This PDF requires a password to open
+            </Text>
+            <Spacer size="lg" />
+            <TextInput
+              style={[
+                styles.passwordModalInput,
+                {
+                  color: theme.text,
+                  backgroundColor: theme.background,
+                  borderColor: passwordError ? colors.error : theme.border,
+                },
+              ]}
+              value={passwordInput}
+              onChangeText={(text) => {
+                setPasswordInput(text);
+                setPasswordError(null);
+              }}
+              placeholder="Enter password"
+              placeholderTextColor={theme.textTertiary}
+              secureTextEntry
+              autoFocus
+              onSubmitEditing={handlePasswordSubmit}
+            />
+            {passwordError && (
+              <Text variant="caption" customColor={colors.error} style={{ marginTop: spacing.xs }}>
+                {passwordError}
+              </Text>
+            )}
+            <Spacer size="lg" />
+            <View style={styles.passwordModalButtons}>
+              <Button
+                title="Cancel"
+                variant="outline"
+                onPress={handlePasswordCancel}
+                style={{ flex: 1 }}
+              />
+              <Spacer size="md" horizontal />
+              <Button
+                title="Open"
+                onPress={handlePasswordSubmit}
+                style={{ flex: 1 }}
+              />
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -1084,5 +1194,33 @@ const styles = StyleSheet.create({
   },
   toggleThumbActive: {
     alignSelf: 'flex-end',
+  },
+  // Password Modal
+  passwordModalContainer: {
+    borderRadius: borderRadius.lg,
+    padding: spacing.xl,
+    width: SCREEN_WIDTH * 0.85,
+    maxWidth: 340,
+    alignItems: 'center',
+  },
+  passwordModalIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: `${colors.primary}15`,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  passwordModalInput: {
+    width: '100%',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    fontSize: 16,
+  },
+  passwordModalButtons: {
+    flexDirection: 'row',
+    width: '100%',
   },
 });

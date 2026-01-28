@@ -9,35 +9,57 @@
 
 # Add any project specific keep options here:
 
-# Apache POI - ignore missing AWT classes (not available on Android)
+# Java AWT/Swing/Beans (not available on Android)
 -dontwarn java.awt.**
 -dontwarn javax.swing.**
 -dontwarn java.beans.**
+-dontwarn javax.imageio.**
 
-# Apache POI XML/Streaming
+# XML Streaming API
 -dontwarn javax.xml.stream.**
 
-# Apache XMLBeans / Saxon (used by POI for XPath)
+# XML Crypto/Digital Signatures
+-dontwarn javax.xml.crypto.**
+
+# Apache XMLBeans / Saxon
 -dontwarn net.sf.saxon.**
 -dontwarn org.apache.xmlbeans.**
 
-# Apache Batik (SVG rendering - not used on Android)
+# Apache Batik SVG
 -dontwarn org.apache.batik.**
 
-# PDFBox - JP2 codec (optional dependency)
+# Apache XML Security
+-dontwarn org.apache.xml.security.**
+-dontwarn org.apache.jcp.xml.dsig.**
+
+# Apache PDFBox (desktop version referenced by POI)
+-dontwarn org.apache.pdfbox.**
+
+# PDFBox Android - JP2 codec
 -dontwarn com.gemalto.jp2.**
 
-# OSGI framework (not used on Android)
+# PDFBox Graphics2D
+-dontwarn de.rototor.pdfbox.graphics2d.**
+
+# OSGI framework
 -dontwarn org.osgi.framework.**
 
-# Log4j OSGI service locator
--dontwarn org.apache.logging.log4j.util.OsgiServiceLocator
+# Log4j
+-dontwarn org.apache.logging.log4j.**
+
+# JGSS (Kerberos)
+-dontwarn org.ietf.jgss.**
+
+# W3C DOM extensions
+-dontwarn org.w3c.dom.events.**
+-dontwarn org.w3c.dom.svg.**
+-dontwarn org.w3c.dom.traversal.**
 
 # Keep Apache POI classes
 -keep class org.apache.poi.** { *; }
 -keep class org.apache.xmlbeans.** { *; }
 
-# Keep PDFBox classes
+# Keep PDFBox Android classes
 -keep class com.tom_roush.pdfbox.** { *; }
 
 # React Native

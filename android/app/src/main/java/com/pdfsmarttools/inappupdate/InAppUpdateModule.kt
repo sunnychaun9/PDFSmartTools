@@ -1,6 +1,7 @@
 package com.pdfsmarttools.inappupdate
 
 import android.app.Activity
+import android.content.Intent
 import android.content.IntentSender
 import com.facebook.react.bridge.*
 import com.facebook.react.modules.core.DeviceEventManagerModule
@@ -20,7 +21,7 @@ import com.google.android.play.core.ktx.isFlexibleUpdateAllowed
  * Allows the app to check for updates and prompt users to update
  * without blocking app usage.
  */
-class InAppUpdateModule(private val reactContext: ReactApplicationContext) :
+class InAppUpdateModule(reactContext: ReactApplicationContext) :
     ReactContextBaseJavaModule(reactContext), ActivityEventListener {
 
     private var appUpdateManager: AppUpdateManager? = null
@@ -39,7 +40,7 @@ class InAppUpdateModule(private val reactContext: ReactApplicationContext) :
     override fun getName(): String = MODULE_NAME
 
     private fun sendEvent(eventName: String, params: WritableMap?) {
-        reactContext
+        reactApplicationContext
             .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
             .emit(eventName, params)
     }
@@ -51,7 +52,7 @@ class InAppUpdateModule(private val reactContext: ReactApplicationContext) :
     @ReactMethod
     fun checkForUpdate(promise: Promise) {
         try {
-            val activity = currentActivity
+            val activity = reactApplicationContext.currentActivity
             if (activity == null) {
                 promise.reject("NO_ACTIVITY", "No activity available")
                 return
@@ -94,7 +95,7 @@ class InAppUpdateModule(private val reactContext: ReactApplicationContext) :
     @ReactMethod
     fun startFlexibleUpdate(promise: Promise) {
         try {
-            val activity = currentActivity
+            val activity = reactApplicationContext.currentActivity
             if (activity == null) {
                 promise.reject("NO_ACTIVITY", "No activity available")
                 return
@@ -118,10 +119,11 @@ class InAppUpdateModule(private val reactContext: ReactApplicationContext) :
                     appUpdateInfo.isFlexibleUpdateAllowed
                 ) {
                     try {
+                        val updateOptions = AppUpdateOptions.newBuilder(AppUpdateType.FLEXIBLE).build()
                         appUpdateManager?.startUpdateFlowForResult(
                             appUpdateInfo,
                             activity,
-                            AppUpdateOptions.newBuilder(AppUpdateType.FLEXIBLE).build(),
+                            updateOptions,
                             UPDATE_REQUEST_CODE
                         )
                     } catch (e: IntentSender.SendIntentException) {
@@ -147,8 +149,8 @@ class InAppUpdateModule(private val reactContext: ReactApplicationContext) :
     private fun handleInstallState(state: InstallState) {
         val params = Arguments.createMap().apply {
             putInt("status", state.installStatus())
-            putLong("bytesDownloaded", state.bytesDownloaded())
-            putLong("totalBytesToDownload", state.totalBytesToDownload())
+            putDouble("bytesDownloaded", state.bytesDownloaded().toDouble())
+            putDouble("totalBytesToDownload", state.totalBytesToDownload().toDouble())
         }
 
         when (state.installStatus()) {
@@ -207,7 +209,7 @@ class InAppUpdateModule(private val reactContext: ReactApplicationContext) :
     @ReactMethod
     fun checkDownloadedUpdate(promise: Promise) {
         try {
-            val activity = currentActivity
+            val activity = reactApplicationContext.currentActivity
             if (activity == null) {
                 promise.reject("NO_ACTIVITY", "No activity available")
                 return
@@ -239,10 +241,10 @@ class InAppUpdateModule(private val reactContext: ReactApplicationContext) :
     }
 
     override fun onActivityResult(
-        activity: Activity?,
+        activity: Activity,
         requestCode: Int,
         resultCode: Int,
-        data: android.content.Intent?
+        data: Intent?
     ) {
         if (requestCode == UPDATE_REQUEST_CODE) {
             when (resultCode) {
@@ -262,7 +264,7 @@ class InAppUpdateModule(private val reactContext: ReactApplicationContext) :
         }
     }
 
-    override fun onNewIntent(intent: android.content.Intent?) {
+    override fun onNewIntent(intent: Intent) {
         // Not needed for in-app updates
     }
 

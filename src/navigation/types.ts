@@ -20,6 +20,7 @@ export type RootStackParamList = {
   CompressPdf: { filePath?: string };
   MergePdf: undefined;
   OcrExtract: undefined;
+  ScanToSearchablePdf: undefined;
   SignPdf: { signatureBase64?: string } | undefined;
   SignatureCreate: { returnTo?: 'SignPdf' } | undefined;
   SplitPdf: undefined;

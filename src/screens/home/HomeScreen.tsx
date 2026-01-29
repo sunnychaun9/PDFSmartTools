@@ -86,6 +86,14 @@ const TOOLS: Tool[] = [
     color: colors.ocrExtract,
   },
   {
+    id: '5b',
+    title: 'Scan to Searchable',
+    description: 'Make PDF searchable',
+    icon: 'search',
+    route: 'ScanToSearchablePdf',
+    color: colors.scanToSearchable,
+  },
+  {
     id: '6',
     title: 'Sign PDF',
     description: 'Add your signature',
@@ -291,6 +299,8 @@ export default function HomeScreen() {
         navigation.navigate('MergePdf');
       } else if (route === 'OcrExtract') {
         navigation.navigate('OcrExtract');
+      } else if (route === 'ScanToSearchablePdf') {
+        navigation.navigate('ScanToSearchablePdf');
       } else if (route === 'SignPdf') {
         navigation.navigate('SignPdf');
       } else if (route === 'SplitPdf') {
@@ -417,7 +427,7 @@ export default function HomeScreen() {
           <View style={styles.statsContent}>
             <View style={styles.statItem}>
               <Text style={[styles.statValue, { color: colors.textOnPrimary }]}>
-                11
+                12
               </Text>
               <Text style={[styles.statLabel, { color: isDark ? theme.textSecondary : 'rgba(255,255,255,0.8)' }]}>
                 Tools

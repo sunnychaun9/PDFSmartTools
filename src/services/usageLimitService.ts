@@ -12,6 +12,7 @@ export const FEATURES = {
   PDF_SPLIT: 'PDF_SPLIT',
   PDF_TO_IMAGE: 'PDF_TO_IMAGE',
   PDF_PROTECT: 'PDF_PROTECT',
+  PDF_OCR: 'PDF_OCR',
 } as const;
 
 export type FeatureKey = typeof FEATURES[keyof typeof FEATURES];
@@ -26,6 +27,7 @@ const DAILY_LIMITS: Record<FeatureKey, number> = {
   [FEATURES.PDF_SPLIT]: 2,
   [FEATURES.PDF_TO_IMAGE]: 2,
   [FEATURES.PDF_PROTECT]: 1,
+  [FEATURES.PDF_OCR]: 1,
 };
 
 // Internal storage structure

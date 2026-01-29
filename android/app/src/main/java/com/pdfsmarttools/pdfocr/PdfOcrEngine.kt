@@ -355,20 +355,33 @@ class PdfOcrEngine(private val context: Context) {
     private suspend fun performOcr(bitmap: Bitmap, pageIndex: Int): PageOcrResult {
         val inputImage = InputImage.fromBitmap(bitmap, 0)
 
-        val text = suspendCancellableCoroutine<Text> { continuation ->
-            recognizer.process(inputImage)
-                .addOnSuccessListener { result ->
-                    continuation.resume(result)
-                }
-                .addOnFailureListener { e ->
-                    // Return empty result on OCR failure rather than crashing
-                    continuation.resume(Text("", emptyList()))
-                }
+        val ocrText: Text? = try {
+            suspendCancellableCoroutine<Text?> { continuation ->
+                recognizer.process(inputImage)
+                    .addOnSuccessListener { result: Text ->
+                        continuation.resume(result) {}
+                    }
+                    .addOnFailureListener { _ ->
+                        continuation.resume(null) {}
+                    }
+            }
+        } catch (e: Exception) {
+            null
+        }
+
+        // Return empty result if OCR failed
+        if (ocrText == null) {
+            return PageOcrResult(
+                pageIndex = pageIndex,
+                textBlocks = emptyList(),
+                fullText = "",
+                hasText = false
+            )
         }
 
         val textBlocks = mutableListOf<TextBlockInfo>()
 
-        for (block in text.textBlocks) {
+        for (block in ocrText.textBlocks) {
             val lines = mutableListOf<LineInfo>()
 
             for (line in block.lines) {
@@ -398,8 +411,8 @@ class PdfOcrEngine(private val context: Context) {
         return PageOcrResult(
             pageIndex = pageIndex,
             textBlocks = textBlocks,
-            fullText = text.text,
-            hasText = text.text.isNotEmpty()
+            fullText = ocrText.text,
+            hasText = ocrText.text.isNotEmpty()
         )
     }
 
@@ -504,16 +517,4 @@ class PdfOcrEngine(private val context: Context) {
     fun close() {
         recognizer.close()
     }
-}
-
-/**
- * Custom Text class for handling OCR failure gracefully
- */
-private class Text(private val fullText: String, private val blocks: List<Text.TextBlock>) :
-    com.google.mlkit.vision.text.Text {
-
-    override fun getText(): String = fullText
-    override fun getTextBlocks(): List<com.google.mlkit.vision.text.Text.TextBlock> = emptyList()
-
-    class TextBlock
 }

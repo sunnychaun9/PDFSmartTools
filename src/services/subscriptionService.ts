@@ -69,7 +69,6 @@ export type SubscriptionStatus = {
 export async function initializeIAP(): Promise<boolean> {
   // Subscription temporarily disabled
   if (!FEATURE_FLAGS.SUBSCRIPTIONS_ENABLED) {
-    console.log('[IAP] Subscriptions disabled - skipping initialization');
     return false;
   }
 
@@ -142,7 +141,6 @@ export function setupPurchaseListeners(
 ): void {
   // Subscription temporarily disabled - no listeners set up
   if (!FEATURE_FLAGS.SUBSCRIPTIONS_ENABLED) {
-    console.log('[IAP] Subscriptions disabled - skipping purchase listeners');
     return;
   }
 
@@ -238,7 +236,6 @@ export async function getSubscriptionProducts(): Promise<SubscriptionProduct[]> 
 export async function purchaseSubscription(_sku: SubscriptionSku): Promise<boolean> {
   // Subscription temporarily disabled
   if (!FEATURE_FLAGS.SUBSCRIPTIONS_ENABLED) {
-    console.log('[IAP] Subscriptions disabled - purchase not available');
     return false;
   }
 

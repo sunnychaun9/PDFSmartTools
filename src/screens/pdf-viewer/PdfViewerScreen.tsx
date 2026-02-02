@@ -267,7 +267,6 @@ export default function PdfViewerScreen() {
       errorString.includes('security');
 
     if (isPasswordError) {
-      console.log('ℹ️ Password-protected PDF detected, prompting for password');
       // Show password prompt
       setShowPasswordModal(true);
       setError(null); // Clear error overlay so it doesn't block modal
@@ -718,7 +717,7 @@ export default function PdfViewerScreen() {
           onError={handleError}
           onLoadProgress={handleLoadProgress}
           onScaleChanged={handleScaleChanged}
-          onPressLink={(uri) => console.log('Link pressed:', uri)}
+          onPressLink={(uri) => {}}
           onPageSingleTap={handleTap}
           trustAllCerts={false}
           renderActivityIndicator={() => renderLoading()}

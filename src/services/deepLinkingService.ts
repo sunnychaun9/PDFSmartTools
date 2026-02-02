@@ -137,7 +137,6 @@ export function setupDeepLinkListener(
   Linking.getInitialURL()
     .then(url => {
       if (url != null && isPdfUri(url)) {
-        console.log('[DeepLink] Cold start with PDF URI:', url);
         handlePdfUri(url, onPdfOpen);
       }
     })
@@ -146,7 +145,6 @@ export function setupDeepLinkListener(
   // Handle foreground/background app open (app already running)
   const subscription = Linking.addEventListener('url', event => {
     if (isPdfUri(event.url)) {
-      console.log('[DeepLink] Foreground PDF URI:', event.url);
       handlePdfUri(event.url, onPdfOpen);
     }
   });

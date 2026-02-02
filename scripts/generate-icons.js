@@ -18,7 +18,6 @@ let sharp;
 try {
   sharp = require('sharp');
 } catch (e) {
-  console.log('Sharp not found. Installing...');
   const { execSync } = require('child_process');
   execSync('npm install sharp --save-dev', { stdio: 'inherit' });
   sharp = require('sharp');
@@ -105,7 +104,7 @@ const ROUND_SVG_CONTENT = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 
 async function generateIcons() {
   const androidResPath = path.join(__dirname, '..', 'android', 'app', 'src', 'main', 'res');
 
-  console.log('Generating Android icons...\n');
+  
 
   for (const icon of ANDROID_ICONS) {
     const folderPath = path.join(androidResPath, icon.name);
@@ -121,7 +120,7 @@ async function generateIcons() {
       .resize(icon.size, icon.size)
       .png()
       .toFile(squarePath);
-    console.log(`Created: ${icon.name}/ic_launcher.png (${icon.size}x${icon.size})`);
+    
 
     // Generate round icon
     const roundPath = path.join(folderPath, 'ic_launcher_round.png');
@@ -129,15 +128,10 @@ async function generateIcons() {
       .resize(icon.size, icon.size)
       .png()
       .toFile(roundPath);
-    console.log(`Created: ${icon.name}/ic_launcher_round.png (${icon.size}x${icon.size})`);
+    
   }
 
-  console.log('\nIcon generation complete!');
-  console.log('\nNote: Adaptive icons (Android 8.0+) use vector drawables in:');
-  console.log('  - drawable/ic_launcher_background.xml');
-  console.log('  - drawable/ic_launcher_foreground.xml');
-  console.log('  - mipmap-anydpi-v26/ic_launcher.xml');
-  console.log('  - mipmap-anydpi-v26/ic_launcher_round.xml');
+  
 }
 
 generateIcons().catch(console.error);

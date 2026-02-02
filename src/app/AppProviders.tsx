@@ -239,6 +239,7 @@ function RatingModalHandler() {
 function AppContent({ children }: { children: React.ReactNode }) {
   const { isDark, theme } = useTheme();
   const navigationRef = useRef<any>(null);
+    const [isNavigationReady, setIsNavigationReady] = useState(false);
   const [pendingPdfUri, setPendingPdfUri] = useState<{
     filePath: string;
     title?: string;
@@ -259,14 +260,29 @@ function AppContent({ children }: { children: React.ReactNode }) {
 
   // Navigate to PDF when navigation is ready and we have a pending URI
   useEffect(() => {
-    if (pendingPdfUri && navigationRef.current) {
-      navigationRef.current.navigate('PdfViewer', {
+    if (!isNavigationReady || !pendingPdfUri || !navigationRef.current) {
+      return;
+    }
+
+    
+    // Use reset to clear navigation stack and navigate directly to PdfViewer
+    // This ensures we don't see the home screen first
+    navigationRef.current.reset({
+      index: 1,
+      routes: [
+        { name: 'Main' },
+        {
+          name: 'PdfViewer',
+          params: {
         filePath: pendingPdfUri.filePath,
         title: pendingPdfUri.title,
-      });
-      setPendingPdfUri(null);
-    }
-  }, [pendingPdfUri]);
+          },
+        },
+      ],
+    });
+
+    setPendingPdfUri(null);
+  }, [isNavigationReady, pendingPdfUri]);
 
   return (
     <>
@@ -277,6 +293,9 @@ function AppContent({ children }: { children: React.ReactNode }) {
       />
       <NavigationContainer
         ref={navigationRef}
+                onReady={() => {
+                  setIsNavigationReady(true);
+                }}
         theme={{
           dark: isDark,
           colors: {

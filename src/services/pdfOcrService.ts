@@ -74,10 +74,9 @@ const eventEmitter = PdfOcr ? new NativeEventEmitter(PdfOcr) : null;
  * const result = await processToSearchablePdf('/path/to/scanned.pdf', {
  *   isPro: true,
  *   onProgress: (progress) => {
- *     console.log(`Page ${progress.currentPage}/${progress.totalPages}: ${progress.progress}%`);
  *   },
  * });
- * console.log(`Searchable PDF saved to: ${result.outputPath}`);
+ *
  * ```
  */
 export async function processToSearchablePdf(

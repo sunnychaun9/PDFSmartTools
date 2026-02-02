@@ -5,4 +5,4 @@ export * from './filePicker';
 export * from './adService';
 export * from './subscriptionService';
 export * from './recentFilesService';
-export * from './shareService';
+export * from './shareService';export * from './deepLinkingService';

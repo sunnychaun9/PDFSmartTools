@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -13,6 +13,7 @@ import {
   checkDownloadedUpdate,
   onUpdateDownloaded,
 } from '../services/inAppUpdateService';
+import { setupDeepLinkListener } from '../services/deepLinkingService';
 
 type AppProvidersProps = {
   children: React.ReactNode;
@@ -237,6 +238,35 @@ function RatingModalHandler() {
 
 function AppContent({ children }: { children: React.ReactNode }) {
   const { isDark, theme } = useTheme();
+  const navigationRef = useRef<any>(null);
+  const [pendingPdfUri, setPendingPdfUri] = useState<{
+    filePath: string;
+    title?: string;
+  } | null>(null);
+
+  // Setup deep link listener for PDF files
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+
+    const handlePdfOpen = (filePath: string, title?: string) => {
+      // Store the PDF to open when navigation is ready
+      setPendingPdfUri({ filePath, title });
+    };
+
+    const unsubscribe = setupDeepLinkListener(handlePdfOpen);
+    return unsubscribe;
+  }, []);
+
+  // Navigate to PDF when navigation is ready and we have a pending URI
+  useEffect(() => {
+    if (pendingPdfUri && navigationRef.current) {
+      navigationRef.current.navigate('PdfViewer', {
+        filePath: pendingPdfUri.filePath,
+        title: pendingPdfUri.title,
+      });
+      setPendingPdfUri(null);
+    }
+  }, [pendingPdfUri]);
 
   return (
     <>
@@ -246,6 +276,7 @@ function AppContent({ children }: { children: React.ReactNode }) {
         translucent={false}
       />
       <NavigationContainer
+        ref={navigationRef}
         theme={{
           dark: isDark,
           colors: {

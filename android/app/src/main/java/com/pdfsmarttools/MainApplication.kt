@@ -39,6 +39,7 @@ class MainApplication : Application(), ReactApplication {
           add(WordToPdfPackage())
           add(InAppUpdatePackage())
           add(PdfOcrPackage())
+          add(com.pdfsmarttools.scan.ScanPackage())
         },
     )
   }

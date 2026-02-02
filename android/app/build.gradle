@@ -91,6 +91,11 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0.0"
+        externalNativeBuild {
+            cmake {
+                cppFlags "-frtti -fexceptions"
+            }
+        }
     }
     signingConfigs {
         debug {
@@ -117,6 +122,12 @@ android {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+        }
+    }
+    externalNativeBuild {
+        cmake {
+            path "src/main/cpp/CMakeLists.txt"
+            version "3.10.2"
         }
     }
 }
@@ -152,4 +163,6 @@ dependencies {
     } else {
         implementation jscFlavor
     }
+    // OpenCV Android AAR (provides native libs and headers)
+    implementation 'org.opencv:opencv-android:4.5.3'
 }

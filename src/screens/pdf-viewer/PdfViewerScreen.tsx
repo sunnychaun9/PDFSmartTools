@@ -237,23 +237,50 @@ export default function PdfViewerScreen() {
     [resetControlsTimer, isFullscreen]
   );
 
-  const handleError = useCallback((err: object) => {
+  const handleError = useCallback((err: any) => {
     setIsLoading(false);
-    const errorString = JSON.stringify(err).toLowerCase();
-    console.error('PDF Error:', err);
+    
+    // Extract error message from various possible formats
+    let errorMessage = '';
+    if (err instanceof Error) {
+      errorMessage = err.message;
+    } else if (typeof err === 'string') {
+      errorMessage = err;
+    } else if (err && err.message) {
+      errorMessage = err.message;
+    } else if (err && err.nativeEvent && err.nativeEvent.message) {
+      errorMessage = err.nativeEvent.message;
+    } else {
+      errorMessage = JSON.stringify(err);
+    }
+    
+    const errorString = errorMessage.toLowerCase();
 
     // Check if error is due to password protection
-    if (
+    const isPasswordError = 
       errorString.includes('password') ||
       errorString.includes('encrypted') ||
-      errorString.includes('decrypt')
-    ) {
+      errorString.includes('decrypt') ||
+      errorString.includes('authorization') ||
+      errorString.includes('owner password') ||
+      errorString.includes('user password') ||
+      errorString.includes('security');
+
+    if (isPasswordError) {
+      console.log('ℹ️ Password-protected PDF detected, prompting for password');
       // Show password prompt
       setShowPasswordModal(true);
+      setError(null); // Clear error overlay so it doesn't block modal
       setPasswordError(pdfPassword ? 'Incorrect password. Please try again.' : null);
-      setError(null);
+      // Reset password input for retry
+      if (pdfPassword) {
+        setPasswordInput('');
+        setPdfPassword(''); // Clear the old password attempt
+      }
     } else {
+      console.error('❌ PDF Error:', err, 'Extracted Message:', errorMessage);
       setError('Failed to load PDF. The file may be corrupted or unsupported.');
+      setShowPasswordModal(false);
     }
   }, [pdfPassword]);
 
@@ -272,6 +299,7 @@ export default function PdfViewerScreen() {
     setShowPasswordModal(false);
     setIsLoading(true);
     setError(null);
+    setInitialPageLoaded(false); // Reset to allow loading to proceed
   }, [passwordInput]);
 
   const handlePasswordCancel = useCallback(() => {
@@ -279,6 +307,7 @@ export default function PdfViewerScreen() {
     setPasswordInput('');
     setPasswordError(null);
     setError('This PDF is password protected.');
+    setPdfPassword(''); // Clear any previous password attempt
   }, []);
 
   const handleScaleChanged = useCallback(
@@ -670,7 +699,7 @@ export default function PdfViewerScreen() {
       {/* PDF View */}
       <View style={styles.pdfContainer}>
         <Pdf
-          key={`pdf-${pdfPassword}`}
+          key={`pdf-${filePath}-${pdfPassword}`}
           ref={pdfRef}
           source={pdfSource}
           password={pdfPassword || undefined}
@@ -704,7 +733,7 @@ export default function PdfViewerScreen() {
       )}
 
       {/* Error state */}
-      {error && (
+      {error && !showPasswordModal && (
         <View style={[styles.errorOverlay, { backgroundColor: theme.background }]}>
           {renderError()}
         </View>

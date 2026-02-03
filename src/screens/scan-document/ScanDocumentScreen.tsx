@@ -15,6 +15,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import { SafeScreen, Header, Spacer } from '../../components/layout';
+import CameraPreview from '../../components/camera/CameraPreview';
 import { Button, Text, Icon, AppModal } from '../../components/ui';
 import { ProgressBar } from '../../components/feedback';
 import { colors, spacing, borderRadius, shadows } from '../../theme';
@@ -71,6 +72,7 @@ export default function ScanDocumentScreen() {
   const [isProcessingEdit, setIsProcessingEdit] = useState(false);
   const [showSourcePicker, setShowSourcePicker] = useState(false);
   const [generatedPdfPath, setGeneratedPdfPath] = useState<string | null>(null);
+  const [showCameraView, setShowCameraView] = useState(false);
 
   const [permissionModal, setPermissionModal] = useState<{
     visible: boolean;
@@ -218,18 +220,11 @@ export default function ScanDocumentScreen() {
         return;
       }
 
-      const result = await launchCamera({
-        mediaType: 'photo',
-        quality: 1,
-        saveToPhotos: false,
-        cameraType: 'back',
-      });
-
-      if (result.didCancel || !result.assets || !result.assets[0]?.uri) {
-        return;
-      }
-
-      await addPageFromUri(result.assets[0].uri);
+      // Show native live camera preview for capture
+      setShowCameraView(true);
+      // Actual capture handled by CameraPreview component which will
+      // call back into `addPageFromUri` via handleCameraCaptured
+      return;
     } catch (error) {
       setErrorModal({
         visible: true,
@@ -239,6 +234,21 @@ export default function ScanDocumentScreen() {
       setIsCapturing(false);
     }
   }, [isCapturing, hideSourcePickerModal, addPageFromUri]);
+
+  const handleCameraCaptured = useCallback(
+    async (uri: string) => {
+      setShowCameraView(false);
+      setIsCapturing(true);
+      try {
+        await addPageFromUri(uri);
+      } catch (error) {
+        setErrorModal({ visible: true, message: String((error as Error).message || error) });
+      } finally {
+        setIsCapturing(false);
+      }
+    },
+    [addPageFromUri]
+  );
 
   const handleGallerySelect = useCallback(async () => {
     hideSourcePickerModal();
@@ -737,6 +747,11 @@ export default function ScanDocumentScreen() {
 
   return (
     <SafeScreen>
+      {showCameraView && (
+        <Modal visible animationType="slide" transparent={false}>
+          <CameraPreview onCapture={handleCameraCaptured} onCancel={() => setShowCameraView(false)} />
+        </Modal>
+      )}
       <Header
         title="Scan Document"
         rightAction={

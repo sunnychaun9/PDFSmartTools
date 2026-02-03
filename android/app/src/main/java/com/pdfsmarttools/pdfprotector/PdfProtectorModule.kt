@@ -214,6 +214,8 @@ class PdfProtectorModule(private val reactContext: ReactApplicationContext) :
                 } catch (e: Exception) {
                     // Ignore close errors
                 }
+                // Cleanup memory
+                System.gc()
             }
         }
     }

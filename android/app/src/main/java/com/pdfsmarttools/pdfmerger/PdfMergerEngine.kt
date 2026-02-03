@@ -8,6 +8,7 @@ import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
+import android.util.Log
 import java.io.File
 import java.io.FileOutputStream
 
@@ -19,6 +20,14 @@ data class MergeResult(
 )
 
 class PdfMergerEngine {
+
+    companion object {
+        private const val TAG = "PdfMergerEngine"
+        // Maximum bitmap size in pixels to prevent OOM
+        private const val MAX_BITMAP_PIXELS = 50_000_000L
+        // Batch size for processing to allow GC
+        private const val PAGE_BATCH_SIZE = 5
+    }
 
     fun merge(
         context: Context,
@@ -58,13 +67,26 @@ class PdfMergerEngine {
                 for (pageIndex in 0 until pageCount) {
                     val page = pdfRenderer.openPage(pageIndex)
 
-                    // Render at original size for quality
-                    val width = page.width
-                    val height = page.height
+                    // Calculate dimensions with memory limits
+                    var width = page.width
+                    var height = page.height
 
-                    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                    // Check if bitmap would be too large and reduce if necessary
+                    val pixelCount = width.toLong() * height.toLong()
+                    if (pixelCount > MAX_BITMAP_PIXELS) {
+                        val reductionFactor = Math.sqrt(MAX_BITMAP_PIXELS.toDouble() / pixelCount.toDouble())
+                        width = (width * reductionFactor).toInt()
+                        height = (height * reductionFactor).toInt()
+                        Log.d(TAG, "File $fileIndex, Page $pageIndex: Reduced dimensions to ${width}x${height}")
+                    }
+
+                    // Use RGB_565 (2 bytes/pixel) instead of ARGB_8888 (4 bytes/pixel)
+                    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
                     bitmap.eraseColor(Color.WHITE)
                     page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
+
+                    val originalWidth = page.width
+                    val originalHeight = page.height
                     page.close()
 
                     // Draw watermark for free users
@@ -72,20 +94,40 @@ class PdfMergerEngine {
                         drawWatermark(bitmap)
                     }
 
-                    // Create PDF page
+                    // Create PDF page with original dimensions
                     totalPageCount++
-                    val pageInfo = PdfDocument.PageInfo.Builder(width, height, totalPageCount).create()
+                    val pageInfo = PdfDocument.PageInfo.Builder(originalWidth, originalHeight, totalPageCount).create()
                     val pdfPage = pdfDocument.startPage(pageInfo)
 
                     val canvas = pdfPage.canvas
-                    canvas.drawBitmap(bitmap, 0f, 0f, null)
+                    // Scale bitmap to original page dimensions if reduced
+                    if (width != originalWidth || height != originalHeight) {
+                        val destRect = android.graphics.Rect(0, 0, originalWidth, originalHeight)
+                        val paint = Paint().apply {
+                            isFilterBitmap = true
+                            isDither = true
+                        }
+                        canvas.drawBitmap(bitmap, null, destRect, paint)
+                    } else {
+                        canvas.drawBitmap(bitmap, 0f, 0f, null)
+                    }
 
                     pdfDocument.finishPage(pdfPage)
+
+                    // Immediately recycle bitmap to free memory
                     bitmap.recycle()
+
+                    // Trigger GC periodically to prevent memory buildup
+                    if (totalPageCount % PAGE_BATCH_SIZE == 0) {
+                        System.gc()
+                    }
                 }
 
                 pdfRenderer.close()
                 fileDescriptor.close()
+
+                // Force GC after each file to free resources
+                System.gc()
 
                 // Report progress per file
                 val progress = ((fileIndex + 1) * 100) / fileCount
@@ -109,6 +151,8 @@ class PdfMergerEngine {
             throw e
         } finally {
             pdfDocument.close()
+            // Final cleanup
+            System.gc()
         }
 
         return MergeResult(
@@ -142,7 +186,13 @@ class PdfMergerEngine {
 
             context.contentResolver.openInputStream(uri)?.use { input ->
                 FileOutputStream(cacheFile).use { output ->
-                    input.copyTo(output)
+                    // Use buffered copy for better memory efficiency with large files
+                    val buffer = ByteArray(8192)
+                    var bytesRead: Int
+                    while (input.read(buffer).also { bytesRead = it } != -1) {
+                        output.write(buffer, 0, bytesRead)
+                    }
+                    output.flush()
                 }
             } ?: throw IllegalArgumentException("Cannot open content URI: $inputPath")
 

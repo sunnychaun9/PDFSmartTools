@@ -3,6 +3,7 @@ package com.pdfsmarttools.pdftoimage
 import android.graphics.Bitmap
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
+import android.util.Log
 import com.facebook.react.bridge.*
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import kotlinx.coroutines.*
@@ -11,6 +12,14 @@ import java.io.FileOutputStream
 
 class PdfToImageModule(private val reactContext: ReactApplicationContext) :
     ReactContextBaseJavaModule(reactContext) {
+
+    companion object {
+        private const val TAG = "PdfToImageModule"
+        // Maximum bitmap size in pixels to prevent OOM (approximately 100MB for RGB_565)
+        private const val MAX_BITMAP_PIXELS = 50_000_000L
+        // Batch size for GC
+        private const val PAGE_BATCH_SIZE = 3
+    }
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
@@ -139,15 +148,25 @@ class PdfToImageModule(private val reactContext: ReactApplicationContext) :
 
                     val page = pdfRenderer.openPage(pageIndex)
 
-                    // Calculate dimensions maintaining aspect ratio
+                    // Calculate dimensions maintaining aspect ratio with memory limits
                     val originalWidth = page.width
                     val originalHeight = page.height
-                    val scale = calculateScale(originalWidth, originalHeight, effectiveMaxResolution)
-                    val scaledWidth = (originalWidth * scale).toInt()
-                    val scaledHeight = (originalHeight * scale).toInt()
+                    var scale = calculateScale(originalWidth, originalHeight, effectiveMaxResolution)
+                    var scaledWidth = (originalWidth * scale).toInt()
+                    var scaledHeight = (originalHeight * scale).toInt()
 
-                    // Create bitmap and render page
-                    val bitmap = Bitmap.createBitmap(scaledWidth, scaledHeight, Bitmap.Config.ARGB_8888)
+                    // Check if bitmap would be too large and reduce if necessary
+                    val pixelCount = scaledWidth.toLong() * scaledHeight.toLong()
+                    if (pixelCount > MAX_BITMAP_PIXELS) {
+                        val reductionFactor = Math.sqrt(MAX_BITMAP_PIXELS.toDouble() / pixelCount.toDouble())
+                        scaledWidth = (scaledWidth * reductionFactor).toInt()
+                        scaledHeight = (scaledHeight * reductionFactor).toInt()
+                        Log.d(TAG, "Page ${pageIndex + 1}: Reduced dimensions to ${scaledWidth}x${scaledHeight} to fit memory limits")
+                    }
+
+                    // Use RGB_565 for JPEG output (no alpha needed), ARGB_8888 for PNG (supports transparency)
+                    val bitmapConfig = if (imageFormat == "png") Bitmap.Config.ARGB_8888 else Bitmap.Config.RGB_565
+                    val bitmap = Bitmap.createBitmap(scaledWidth, scaledHeight, bitmapConfig)
 
                     // Fill with white background for JPEG (since JPEG doesn't support transparency)
                     if (imageFormat != "png") {
@@ -165,8 +184,14 @@ class PdfToImageModule(private val reactContext: ReactApplicationContext) :
                         bitmap.compress(compressFormat, effectiveQuality, out)
                     }
 
+                    // Immediately recycle bitmap to free memory
                     bitmap.recycle()
                     outputPaths.add(outputFile.absolutePath)
+
+                    // Trigger GC periodically to prevent memory buildup
+                    if ((index + 1) % PAGE_BATCH_SIZE == 0) {
+                        System.gc()
+                    }
                 }
 
                 // Build response
@@ -194,12 +219,15 @@ class PdfToImageModule(private val reactContext: ReactApplicationContext) :
                 } catch (e: Exception) {
                     // Ignore cleanup errors
                 }
+                // Final cleanup
+                System.gc()
             }
         }
     }
 
     /**
      * Calculate scale factor to fit within max resolution while maintaining aspect ratio
+     * Limited to prevent excessive memory usage
      */
     private fun calculateScale(width: Int, height: Int, maxResolution: Int): Float {
         val maxDimension = maxOf(width, height)
@@ -209,7 +237,8 @@ class PdfToImageModule(private val reactContext: ReactApplicationContext) :
             // For higher resolution (Pro users), scale up if needed
             // Default PDF rendering is 72 DPI, scale up to achieve higher DPI
             val scaleFactor = maxResolution.toFloat() / maxDimension.toFloat()
-            minOf(scaleFactor, 4.0f) // Cap at 4x to prevent memory issues
+            // Cap at 3x to prevent memory issues (reduced from 4x)
+            minOf(scaleFactor, 3.0f)
         }
     }
 

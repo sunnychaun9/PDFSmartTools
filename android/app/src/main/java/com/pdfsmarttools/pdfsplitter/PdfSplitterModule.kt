@@ -2,9 +2,11 @@ package com.pdfsmarttools.pdfsplitter
 
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
+import android.util.Log
 import com.facebook.react.bridge.*
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import kotlinx.coroutines.*
@@ -13,6 +15,14 @@ import java.io.FileOutputStream
 
 class PdfSplitterModule(private val reactContext: ReactApplicationContext) :
     ReactContextBaseJavaModule(reactContext) {
+
+    companion object {
+        private const val TAG = "PdfSplitterModule"
+        // Maximum bitmap size in pixels to prevent OOM
+        private const val MAX_BITMAP_PIXELS = 50_000_000L
+        // Batch size for GC
+        private const val PAGE_BATCH_SIZE = 5
+    }
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
@@ -110,24 +120,59 @@ class PdfSplitterModule(private val reactContext: ReactApplicationContext) :
 
                     // Create new PDF for this range
                     val pdfDocument = PdfDocument()
+                    var pagesProcessed = 0
 
                     for (pageNum in start..end) {
                         val pageIndex = pageNum - 1 // Convert to 0-based index
                         val page = pdfRenderer.openPage(pageIndex)
 
-                        // Create bitmap and render page
-                        val bitmap = Bitmap.createBitmap(page.width, page.height, Bitmap.Config.ARGB_8888)
+                        // Calculate dimensions with memory limits
+                        var width = page.width
+                        var height = page.height
+                        val originalWidth = width
+                        val originalHeight = height
+
+                        // Check if bitmap would be too large and reduce if necessary
+                        val pixelCount = width.toLong() * height.toLong()
+                        if (pixelCount > MAX_BITMAP_PIXELS) {
+                            val reductionFactor = Math.sqrt(MAX_BITMAP_PIXELS.toDouble() / pixelCount.toDouble())
+                            width = (width * reductionFactor).toInt()
+                            height = (height * reductionFactor).toInt()
+                            Log.d(TAG, "Page $pageNum: Reduced dimensions to ${width}x${height}")
+                        }
+
+                        // Use RGB_565 (2 bytes/pixel) instead of ARGB_8888 (4 bytes/pixel)
+                        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
                         bitmap.eraseColor(Color.WHITE)
                         page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                        page.close()
 
-                        // Create page in output document
-                        val pageInfo = PdfDocument.PageInfo.Builder(page.width, page.height, pageNum).create()
+                        // Create page in output document with original dimensions
+                        val pageInfo = PdfDocument.PageInfo.Builder(originalWidth, originalHeight, pageNum).create()
                         val pdfPage = pdfDocument.startPage(pageInfo)
-                        pdfPage.canvas.drawBitmap(bitmap, 0f, 0f, null)
+
+                        // Scale bitmap to original dimensions if it was reduced
+                        if (width != originalWidth || height != originalHeight) {
+                            val destRect = android.graphics.Rect(0, 0, originalWidth, originalHeight)
+                            val paint = Paint().apply {
+                                isFilterBitmap = true
+                                isDither = true
+                            }
+                            pdfPage.canvas.drawBitmap(bitmap, null, destRect, paint)
+                        } else {
+                            pdfPage.canvas.drawBitmap(bitmap, 0f, 0f, null)
+                        }
+
                         pdfDocument.finishPage(pdfPage)
 
-                        page.close()
+                        // Immediately recycle bitmap to free memory
                         bitmap.recycle()
+                        pagesProcessed++
+
+                        // Trigger GC periodically
+                        if (pagesProcessed % PAGE_BATCH_SIZE == 0) {
+                            System.gc()
+                        }
 
                         // Update progress
                         val pageProgress = 20 + ((completedRanges * 70 / totalRanges) +
@@ -140,6 +185,9 @@ class PdfSplitterModule(private val reactContext: ReactApplicationContext) :
                         pdfDocument.writeTo(outputStream)
                     }
                     pdfDocument.close()
+
+                    // Force GC after each range
+                    System.gc()
 
                     // Add to results
                     val outputFile = File(outputPath)
@@ -219,19 +267,47 @@ class PdfSplitterModule(private val reactContext: ReactApplicationContext) :
                 val pageIndex = pageNumber - 1
                 val page = pdfRenderer.openPage(pageIndex)
 
-                val bitmap = Bitmap.createBitmap(page.width, page.height, Bitmap.Config.ARGB_8888)
+                // Calculate dimensions with memory limits
+                var width = page.width
+                var height = page.height
+                val originalWidth = width
+                val originalHeight = height
+
+                val pixelCount = width.toLong() * height.toLong()
+                if (pixelCount > MAX_BITMAP_PIXELS) {
+                    val reductionFactor = Math.sqrt(MAX_BITMAP_PIXELS.toDouble() / pixelCount.toDouble())
+                    width = (width * reductionFactor).toInt()
+                    height = (height * reductionFactor).toInt()
+                    Log.d(TAG, "Page $pageNumber: Reduced dimensions to ${width}x${height}")
+                }
+
+                // Use RGB_565 for memory efficiency
+                val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
                 bitmap.eraseColor(Color.WHITE)
                 page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                page.close()
 
                 sendProgressEvent(60, "Creating PDF...")
 
                 val pdfDocument = PdfDocument()
-                val pageInfo = PdfDocument.PageInfo.Builder(page.width, page.height, 1).create()
+                val pageInfo = PdfDocument.PageInfo.Builder(originalWidth, originalHeight, 1).create()
                 val pdfPage = pdfDocument.startPage(pageInfo)
-                pdfPage.canvas.drawBitmap(bitmap, 0f, 0f, null)
+
+                // Scale bitmap to original dimensions if it was reduced
+                if (width != originalWidth || height != originalHeight) {
+                    val destRect = android.graphics.Rect(0, 0, originalWidth, originalHeight)
+                    val paint = Paint().apply {
+                        isFilterBitmap = true
+                        isDither = true
+                    }
+                    pdfPage.canvas.drawBitmap(bitmap, null, destRect, paint)
+                } else {
+                    pdfPage.canvas.drawBitmap(bitmap, 0f, 0f, null)
+                }
+
                 pdfDocument.finishPage(pdfPage)
 
-                page.close()
+                // Immediately recycle bitmap
                 bitmap.recycle()
 
                 sendProgressEvent(80, "Saving...")

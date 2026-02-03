@@ -9,6 +9,7 @@ import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
+import android.util.Log
 import com.facebook.react.bridge.*
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import kotlinx.coroutines.*
@@ -18,6 +19,14 @@ import android.util.Base64
 
 class PdfSignerModule(private val reactContext: ReactApplicationContext) :
     ReactContextBaseJavaModule(reactContext) {
+
+    companion object {
+        private const val TAG = "PdfSignerModule"
+        // Maximum bitmap size in pixels to prevent OOM
+        private const val MAX_BITMAP_PIXELS = 50_000_000L
+        // Batch size for GC
+        private const val PAGE_BATCH_SIZE = 5
+    }
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
@@ -80,24 +89,45 @@ class PdfSignerModule(private val reactContext: ReactApplicationContext) :
                 // Process each page
                 for (i in 0 until pageCount) {
                     val page = pdfRenderer.openPage(i)
-                    val pageWidth = page.width
-                    val pageHeight = page.height
+                    val originalWidth = page.width
+                    val originalHeight = page.height
 
-                    // Create bitmap for the page
-                    val bitmap = Bitmap.createBitmap(pageWidth, pageHeight, Bitmap.Config.ARGB_8888)
+                    // Calculate dimensions with memory limits
+                    var width = originalWidth
+                    var height = originalHeight
+
+                    val pixelCount = width.toLong() * height.toLong()
+                    if (pixelCount > MAX_BITMAP_PIXELS) {
+                        val reductionFactor = Math.sqrt(MAX_BITMAP_PIXELS.toDouble() / pixelCount.toDouble())
+                        width = (width * reductionFactor).toInt()
+                        height = (height * reductionFactor).toInt()
+                        Log.d(TAG, "Page $i: Reduced dimensions to ${width}x${height}")
+                    }
+
+                    // Use RGB_565 for memory efficiency (signature will have alpha but rendered onto this)
+                    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
                     bitmap.eraseColor(Color.WHITE)
 
                     // Render original page
                     page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
                     page.close()
 
-                    // Create PDF page
-                    val pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, i + 1).create()
+                    // Create PDF page with original dimensions
+                    val pageInfo = PdfDocument.PageInfo.Builder(originalWidth, originalHeight, i + 1).create()
                     val pdfPage = pdfDocument.startPage(pageInfo)
                     val canvas = pdfPage.canvas
 
-                    // Draw original page content
-                    canvas.drawBitmap(bitmap, 0f, 0f, null)
+                    // Draw original page content (scaled if needed)
+                    if (width != originalWidth || height != originalHeight) {
+                        val destRect = android.graphics.Rect(0, 0, originalWidth, originalHeight)
+                        val paint = Paint().apply {
+                            isFilterBitmap = true
+                            isDither = true
+                        }
+                        canvas.drawBitmap(bitmap, null, destRect, paint)
+                    } else {
+                        canvas.drawBitmap(bitmap, 0f, 0f, null)
+                    }
 
                     // Add signature to the specified page
                     if (i == pageNumber) {
@@ -114,11 +144,18 @@ class PdfSignerModule(private val reactContext: ReactApplicationContext) :
 
                     // Add watermark for free users
                     if (addWatermark) {
-                        drawWatermark(canvas, pageWidth, pageHeight)
+                        drawWatermark(canvas, originalWidth, originalHeight)
                     }
 
                     pdfDocument.finishPage(pdfPage)
+
+                    // Immediately recycle bitmap to free memory
                     bitmap.recycle()
+
+                    // Trigger GC periodically
+                    if ((i + 1) % PAGE_BATCH_SIZE == 0) {
+                        System.gc()
+                    }
 
                     val progress = 40 + ((i + 1) * 50 / pageCount)
                     sendProgressEvent(progress, "Processing page ${i + 1} of $pageCount...")
@@ -135,6 +172,9 @@ class PdfSignerModule(private val reactContext: ReactApplicationContext) :
                 pdfRenderer.close()
                 fileDescriptor.close()
                 signatureBitmap.recycle()
+
+                // Final cleanup
+                System.gc()
 
                 sendProgressEvent(100, "Complete!")
 

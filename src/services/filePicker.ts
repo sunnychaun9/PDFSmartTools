@@ -3,12 +3,18 @@ import RNFS from 'react-native-fs';
 
 const { FilePicker } = NativeModules;
 
+// File size thresholds for performance warnings
+export const FILE_SIZE_WARNING_THRESHOLD = 50 * 1024 * 1024; // 50MB - show warning
+export const FILE_SIZE_MAX_RECOMMENDED = 100 * 1024 * 1024; // 100MB - show strong warning
+
 export type PickedFile = {
   uri: string;
   name: string;
   size: number;
   formattedSize: string;
   localPath: string;
+  isLargeFile: boolean;
+  sizeWarning?: string;
 };
 
 function formatFileSize(bytes: number): string {
@@ -57,12 +63,24 @@ export async function pickPdfFile(): Promise<PickedFile | null> {
     const stat = await RNFS.stat(localPath);
     const size = stat.size;
 
+    // Determine if file is large and generate appropriate warning
+    const isLargeFile = size > FILE_SIZE_WARNING_THRESHOLD;
+    let sizeWarning: string | undefined;
+
+    if (size > FILE_SIZE_MAX_RECOMMENDED) {
+      sizeWarning = `This file is ${formatFileSize(size)}. Very large files may take longer to process and could cause performance issues.`;
+    } else if (size > FILE_SIZE_WARNING_THRESHOLD) {
+      sizeWarning = `This file is ${formatFileSize(size)}. Processing may take a moment.`;
+    }
+
     return {
       uri: result.uri,
       name: result.name,
       size: size,
       formattedSize: formatFileSize(size),
       localPath,
+      isLargeFile,
+      sizeWarning,
     };
   } catch (error) {
     if (error instanceof Error) {
@@ -101,12 +119,24 @@ export async function pickWordFile(): Promise<PickedFile | null> {
     const stat = await RNFS.stat(localPath);
     const size = stat.size;
 
+    // Determine if file is large and generate appropriate warning
+    const isLargeFile = size > FILE_SIZE_WARNING_THRESHOLD;
+    let sizeWarning: string | undefined;
+
+    if (size > FILE_SIZE_MAX_RECOMMENDED) {
+      sizeWarning = `This file is ${formatFileSize(size)}. Very large files may take longer to process and could cause performance issues.`;
+    } else if (size > FILE_SIZE_WARNING_THRESHOLD) {
+      sizeWarning = `This file is ${formatFileSize(size)}. Processing may take a moment.`;
+    }
+
     return {
       uri: result.uri,
       name: result.name,
       size: size,
       formattedSize: formatFileSize(size),
       localPath,
+      isLargeFile,
+      sizeWarning,
     };
   } catch (error) {
     if (error instanceof Error) {

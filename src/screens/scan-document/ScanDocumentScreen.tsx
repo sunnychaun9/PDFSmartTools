@@ -160,6 +160,10 @@ export default function ScanDocumentScreen() {
       // Now process the cached file with auto enhancement
       const processResult = await processImage(cachePath, { mode: 'auto' });
 
+      if ((processResult as any).processingTimeMs) {
+        console.log('Process time (ms):', (processResult as any).processingTimeMs);
+      }
+
       if (!processResult.success || !processResult.outputPath) {
         // If processing failed, use the cached original
         const newPage: ScannedPage = {

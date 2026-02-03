@@ -33,6 +33,7 @@ type ProcessImageOptions = {
 type ProcessImageResult = {
   path: string;
   success: boolean;
+  processingTimeMs?: number;
 };
 
 type RotateImageResult = {
@@ -80,14 +81,14 @@ export async function savePdfToDownloads(
 export async function processImage(
   path: string,
   options: ProcessImageOptions = {}
-): Promise<{ success: boolean; outputPath?: string; error?: string }> {
+): Promise<{ success: boolean; outputPath?: string; error?: string; processingTimeMs?: number }> {
   if (Platform.OS !== 'android' || !ScanPdfModule) {
     return { success: false, error: 'Native module not available' };
   }
 
   try {
     const result = await ScanPdfModule.processImage(path, options);
-    return { success: result.success, outputPath: result.path };
+    return { success: result.success, outputPath: result.path, error: undefined, ...(result.processingTimeMs ? { processingTimeMs: result.processingTimeMs } : {}) } as any;
   } catch (error: any) {
     return { success: false, error: String(error.message || error) };
   }

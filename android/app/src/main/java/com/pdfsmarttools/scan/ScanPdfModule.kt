@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.util.Log
+import android.os.SystemClock
 import com.facebook.react.bridge.*
 import java.io.*
 import java.util.concurrent.Executors
@@ -200,8 +201,28 @@ class ScanPdfModule(reactContext: ReactApplicationContext) : ReactContextBaseJav
                     bitmap = rotateBitmap(bitmap, rotation.toFloat())
                 }
 
+                val startTime = SystemClock.elapsedRealtime()
+
                 // Apply enhancement mode
                 val mode = if (options.hasKey("mode")) options.getString("mode") else "auto"
+                // If auto mode or explicit autoCrop requested, perform auto-edge detection and perspective crop
+                val autoCrop = if (options.hasKey("autoCrop")) options.getBoolean("autoCrop") else false
+                if ((mode == "auto" || autoCrop) ) {
+                    try {
+                        val quad = detectDocumentBounds(bitmap)
+                        if (quad != null) {
+                            val transformed = applyPerspectiveTransform(bitmap, quad)
+                            // only replace if transform succeeded
+                            if (transformed != null) {
+                                bitmap.recycle()
+                                bitmap = transformed
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Auto-crop failed, continuing with original image", e)
+                    }
+                }
+
                 bitmap = when (mode) {
                     "grayscale" -> applyGrayscale(bitmap)
                     "bw" -> applyBlackAndWhite(bitmap)
@@ -216,16 +237,124 @@ class ScanPdfModule(reactContext: ReactApplicationContext) : ReactContextBaseJav
                 }
                 bitmap.recycle()
 
-                Log.d(TAG, "Image processed: ${outFile.absolutePath}")
+                val endTime = SystemClock.elapsedRealtime()
+                val elapsed = endTime - startTime
+
+                Log.d(TAG, "Image processed: ${outFile.absolutePath} in ${elapsed}ms")
 
                 val result = Arguments.createMap()
                 result.putString("path", outFile.absolutePath)
                 result.putBoolean("success", true)
+                result.putInt("processingTimeMs", elapsed.toInt())
                 promise.resolve(result)
             } catch (e: Exception) {
                 Log.e(TAG, "Image processing failed", e)
                 promise.reject("PROCESS_ERROR", e.message, e)
             }
+        }
+    }
+
+    /**
+     * Detect document bounds by simple thresholding and bounding box of dark pixels.
+     * Returns float array [minX,minY,maxX,minY,maxX,maxY,minX,maxY] in source bitmap coords or null.
+     */
+    private fun detectDocumentBounds(bitmap: Bitmap): FloatArray? {
+        try {
+            // Downscale for detection to speed up processing
+            val maxDetectSize = 800
+            val w = bitmap.width
+            val h = bitmap.height
+            val scale = if (w > maxDetectSize || h > maxDetectSize) {
+                Math.min(maxDetectSize.toFloat() / w.toFloat(), maxDetectSize.toFloat() / h.toFloat())
+            } else {
+                1f
+            }
+
+            val detectBitmap = if (scale < 1f) Bitmap.createScaledBitmap(bitmap, (w * scale).toInt(), (h * scale).toInt(), true) else bitmap
+
+            val dw = detectBitmap.width
+            val dh = detectBitmap.height
+
+            val pixels = IntArray(dw * dh)
+            detectBitmap.getPixels(pixels, 0, dw, 0, 0, dw, dh)
+
+            var minX = dw
+            var minY = dh
+            var maxX = 0
+            var maxY = 0
+
+            // Threshold: consider pixel dark if intensity < 200
+            for (y in 0 until dh) {
+                val rowOffset = y * dw
+                for (x in 0 until dw) {
+                    val p = pixels[rowOffset + x]
+                    val r = Color.red(p)
+                    val g = Color.green(p)
+                    val b = Color.blue(p)
+                    val gray = (0.299 * r + 0.587 * g + 0.114 * b).toInt()
+                    if (gray < 200) {
+                        if (x < minX) minX = x
+                        if (x > maxX) maxX = x
+                        if (y < minY) minY = y
+                        if (y > maxY) maxY = y
+                    }
+                }
+            }
+
+            if (minX >= maxX || minY >= maxY) {
+                if (detectBitmap !== bitmap) detectBitmap.recycle()
+                return null
+            }
+
+            // Map back to original bitmap coordinates
+            val invScale = 1f / scale
+            val sMinX = minX * invScale
+            val sMinY = minY * invScale
+            val sMaxX = maxX * invScale
+            val sMaxY = maxY * invScale
+
+            if (detectBitmap !== bitmap) detectBitmap.recycle()
+
+            return floatArrayOf(
+                sMinX, sMinY,
+                sMaxX, sMinY,
+                sMaxX, sMaxY,
+                sMinX, sMaxY
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "detectDocumentBounds failed", e)
+            return null
+        }
+    }
+
+    /**
+     * Apply perspective transform from src quad to axis-aligned rectangle.
+     */
+    private fun applyPerspectiveTransform(source: Bitmap, srcQuad: FloatArray): Bitmap? {
+        try {
+            // srcQuad expected: [tlx,tly, trx,try, brx,bry, blx,bly]
+            val srcWidth = Math.max(Math.hypot((srcQuad[2] - srcQuad[0]).toDouble(), (srcQuad[3] - srcQuad[1]).toDouble()), Math.hypot((srcQuad[6] - srcQuad[4]).toDouble(), (srcQuad[7] - srcQuad[5]).toDouble())).toInt()
+            val srcHeight = Math.max(Math.hypot((srcQuad[4] - srcQuad[2]).toDouble(), (srcQuad[5] - srcQuad[3]).toDouble()), Math.hypot((srcQuad[0] - srcQuad[6]).toDouble(), (srcQuad[1] - srcQuad[7]).toDouble())).toInt()
+
+            if (srcWidth <= 0 || srcHeight <= 0) return null
+
+            val dstWidth = srcWidth
+            val dstHeight = srcHeight
+
+            val dst = floatArrayOf(0f, 0f, dstWidth.toFloat(), 0f, dstWidth.toFloat(), dstHeight.toFloat(), 0f, dstHeight.toFloat())
+
+            val matrix = Matrix()
+            matrix.setPolyToPoly(srcQuad, 0, dst, 0, 4)
+
+            val output = Bitmap.createBitmap(dstWidth, dstHeight, Bitmap.Config.RGB_565)
+            val canvas = Canvas(output)
+            val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+            canvas.drawBitmap(source, matrix, paint)
+
+            return output
+        } catch (e: Exception) {
+            Log.w(TAG, "applyPerspectiveTransform failed", e)
+            return null
         }
     }
 

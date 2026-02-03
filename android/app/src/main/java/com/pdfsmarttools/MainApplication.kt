@@ -18,6 +18,7 @@ import com.pdfsmarttools.pdfunlock.PdfUnlockPackage
 import com.pdfsmarttools.wordtopdf.WordToPdfPackage
 import com.pdfsmarttools.inappupdate.InAppUpdatePackage
 import com.pdfsmarttools.pdfocr.PdfOcrPackage
+import com.pdfsmarttools.intent.IntentPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -40,6 +41,7 @@ class MainApplication : Application(), ReactApplication {
           add(InAppUpdatePackage())
           add(PdfOcrPackage())
           add(com.pdfsmarttools.scan.ScanPackage())
+          add(IntentPackage())
         },
     )
   }

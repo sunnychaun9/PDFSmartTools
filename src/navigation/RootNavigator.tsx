@@ -11,6 +11,7 @@ import CompressPdfScreen from '../screens/pdf-compressor/CompressPdfScreen';
 import { MergePdfScreen } from '../screens/merge-pdf';
 import { OcrScreen } from '../screens/ocr';
 import { ScanToSearchablePdfScreen } from '../screens/scan-to-searchable-pdf';
+import { ScanDocumentScreen } from '../screens/scan-document';
 import { SignPdfScreen, SignatureCreateScreen } from '../screens/sign-pdf';
 import { SplitPdfScreen } from '../screens/split-pdf';
 import { PdfToImageScreen } from '../screens/pdf-to-image';
@@ -51,6 +52,11 @@ export default function RootNavigator() {
       <Stack.Screen
         name="ScanToSearchablePdf"
         component={ScanToSearchablePdfScreen}
+        options={{ animation: 'slide_from_bottom' }}
+      />
+      <Stack.Screen
+        name="ScanDocument"
+        component={ScanDocumentScreen}
         options={{ animation: 'slide_from_bottom' }}
       />
       <Stack.Screen

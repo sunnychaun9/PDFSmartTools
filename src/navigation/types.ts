@@ -21,6 +21,7 @@ export type RootStackParamList = {
   MergePdf: undefined;
   OcrExtract: undefined;
   ScanToSearchablePdf: undefined;
+  ScanDocument: undefined;
   SignPdf: { signatureBase64?: string } | undefined;
   SignatureCreate: { returnTo?: 'SignPdf' } | undefined;
   SplitPdf: undefined;

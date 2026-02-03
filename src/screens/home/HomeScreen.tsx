@@ -46,6 +46,14 @@ type Tool = {
 
 const TOOLS: Tool[] = [
   {
+    id: '0',
+    title: 'Scan Document',
+    description: 'Camera to PDF',
+    icon: 'camera',
+    route: 'ScanDocument',
+    color: colors.scanDocument,
+  },
+  {
     id: '1',
     title: 'Image to PDF',
     description: 'Convert photos to PDF',
@@ -301,6 +309,8 @@ export default function HomeScreen() {
         navigation.navigate('OcrExtract');
       } else if (route === 'ScanToSearchablePdf') {
         navigation.navigate('ScanToSearchablePdf');
+      } else if (route === 'ScanDocument') {
+        navigation.navigate('ScanDocument');
       } else if (route === 'SignPdf') {
         navigation.navigate('SignPdf');
       } else if (route === 'SplitPdf') {
@@ -427,7 +437,7 @@ export default function HomeScreen() {
           <View style={styles.statsContent}>
             <View style={styles.statItem}>
               <Text style={[styles.statValue, { color: colors.textOnPrimary }]}>
-                12
+                13
               </Text>
               <Text style={[styles.statLabel, { color: isDark ? theme.textSecondary : 'rgba(255,255,255,0.8)' }]}>
                 Tools

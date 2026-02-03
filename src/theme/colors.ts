@@ -69,6 +69,8 @@ export const colors = {
   wordToPdfGradient: ['#2563EB', '#1D4ED8'] as const,
   scanToSearchable: '#7C3AED',
   scanToSearchableGradient: ['#7C3AED', '#6D28D9'] as const,
+  scanDocument: '#0EA5E9',
+  scanDocumentGradient: ['#0EA5E9', '#0284C7'] as const,
   proPlan: '#8B5CF6',
   proPlanGradient: ['#8B5CF6', '#7C3AED'] as const,
 

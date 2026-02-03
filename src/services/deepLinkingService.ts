@@ -1,9 +1,11 @@
 import { Platform, Linking } from 'react-native';
 import ReactNativeBlobUtil from 'react-native-blob-util';
+import { intentService } from './intentService';
 
 /**
  * Deep linking service for handling PDF URIs from external apps
  * Supports both file:// and content:// URIs (scoped storage compatible)
+ * Uses native IntentModule for ACTION_VIEW intents with MIME types
  */
 
 /**
@@ -129,28 +131,41 @@ export async function parsePdfDeepLink(
 /**
  * Setup deep link listeners for initial URL and ongoing URL events
  * Call this in AppProviders to detect PDFs opened from external apps
+ * Uses native IntentModule for proper ACTION_VIEW intent handling
  */
 export function setupDeepLinkListener(
   onPdfOpen: (filePath: string, title?: string) => void
 ) {
-  // Handle cold start (app not running)
-  Linking.getInitialURL()
-    .then(url => {
-      if (url != null && isPdfUri(url)) {
-        handlePdfUri(url, onPdfOpen);
+  // Handle cold start - check for initial PDF intent from native module
+  intentService.getInitialIntent()
+    .then(intentData => {
+      if (intentData) {
+        const fileName = intentData.fileName.replace(/\.pdf$/i, '');
+        onPdfOpen(intentData.filePath, fileName);
+        intentService.clearIntent();
       }
     })
-    .catch(err => console.error('[DeepLink] Error getting initial URL:', err));
+    .catch(err => console.error('[DeepLink] Error getting initial intent:', err));
 
-  // Handle foreground/background app open (app already running)
+  // Listen for new intents while app is running (e.g., from singleTask mode)
+  const unsubscribeIntent = intentService.addListener(intentData => {
+    const fileName = intentData.fileName.replace(/\.pdf$/i, '');
+    onPdfOpen(intentData.filePath, fileName);
+    intentService.clearIntent();
+  });
+
+  // Also keep Linking listener as fallback for URL scheme deep links
   const subscription = Linking.addEventListener('url', event => {
     if (isPdfUri(event.url)) {
       handlePdfUri(event.url, onPdfOpen);
     }
   });
 
-  // Return unsubscribe function
-  return () => subscription.remove();
+  // Return combined unsubscribe function
+  return () => {
+    unsubscribeIntent();
+    subscription.remove();
+  };
 }
 
 /**

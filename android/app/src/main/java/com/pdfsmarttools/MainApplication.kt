@@ -19,6 +19,8 @@ import com.pdfsmarttools.wordtopdf.WordToPdfPackage
 import com.pdfsmarttools.inappupdate.InAppUpdatePackage
 import com.pdfsmarttools.pdfocr.PdfOcrPackage
 import com.pdfsmarttools.intent.IntentPackage
+import com.pdfsmarttools.pdfpagemanager.PdfPageManagerPackage
+import com.pdfsmarttools.pdftoword.PdfToWordPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -42,6 +44,8 @@ class MainApplication : Application(), ReactApplication {
           add(PdfOcrPackage())
           add(com.pdfsmarttools.scan.ScanPackage())
           add(IntentPackage())
+          add(PdfPageManagerPackage())
+          add(PdfToWordPackage())
         },
     )
   }

@@ -71,6 +71,10 @@ export const colors = {
   scanToSearchableGradient: ['#7C3AED', '#6D28D9'] as const,
   scanDocument: '#0EA5E9',
   scanDocumentGradient: ['#0EA5E9', '#0284C7'] as const,
+  organizePages: '#8B5CF6',
+  organizePagesGradient: ['#8B5CF6', '#7C3AED'] as const,
+  pdfToWord: '#059669',
+  pdfToWordGradient: ['#059669', '#047857'] as const,
   proPlan: '#8B5CF6',
   proPlanGradient: ['#8B5CF6', '#7C3AED'] as const,
 

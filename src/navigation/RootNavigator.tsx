@@ -14,10 +14,12 @@ import { ScanToSearchablePdfScreen } from '../screens/scan-to-searchable-pdf';
 import { ScanDocumentScreen } from '../screens/scan-document';
 import { SignPdfScreen, SignatureCreateScreen } from '../screens/sign-pdf';
 import { SplitPdfScreen } from '../screens/split-pdf';
+import { OrganizePagesScreen } from '../screens/organize-pages';
 import { PdfToImageScreen } from '../screens/pdf-to-image';
 import { ProtectPdfScreen } from '../screens/protect-pdf';
 import { UnlockPdfScreen } from '../screens/pdf-unlock';
 import { WordToPdfScreen } from '../screens/word-to-pdf';
+import { PdfToWordScreen } from '../screens/pdf-to-word';
 import ProScreen from '../screens/pro/ProScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -75,6 +77,11 @@ export default function RootNavigator() {
         options={{ animation: 'slide_from_bottom' }}
       />
       <Stack.Screen
+        name="OrganizePages"
+        component={OrganizePagesScreen}
+        options={{ animation: 'slide_from_bottom' }}
+      />
+      <Stack.Screen
         name="PdfToImage"
         component={PdfToImageScreen}
         options={{ animation: 'slide_from_bottom' }}
@@ -92,6 +99,11 @@ export default function RootNavigator() {
       <Stack.Screen
         name="WordToPdf"
         component={WordToPdfScreen}
+        options={{ animation: 'slide_from_bottom' }}
+      />
+      <Stack.Screen
+        name="PdfToWord"
+        component={PdfToWordScreen}
         options={{ animation: 'slide_from_bottom' }}
       />
       <Stack.Screen

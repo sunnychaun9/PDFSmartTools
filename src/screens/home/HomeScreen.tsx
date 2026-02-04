@@ -118,6 +118,14 @@ const TOOLS: Tool[] = [
     color: colors.splitPdf,
   },
   {
+    id: '7b',
+    title: 'Organize Pages',
+    description: 'Rotate, delete, reorder',
+    icon: 'layers',
+    route: 'OrganizePages',
+    color: colors.organizePages,
+  },
+  {
     id: '8',
     title: 'Protect PDF',
     description: 'Add password security',
@@ -140,6 +148,14 @@ const TOOLS: Tool[] = [
     icon: 'file-text',
     route: 'WordToPdf',
     color: colors.wordToPdf,
+  },
+  {
+    id: '10b',
+    title: 'PDF to Word',
+    description: 'Convert to DOCX',
+    icon: 'file-text',
+    route: 'PdfToWord',
+    color: colors.pdfToWord,
   },
   {
     id: '11',
@@ -315,6 +331,8 @@ export default function HomeScreen() {
         navigation.navigate('SignPdf');
       } else if (route === 'SplitPdf') {
         navigation.navigate('SplitPdf');
+      } else if (route === 'OrganizePages') {
+        navigation.navigate('OrganizePages');
       } else if (route === 'PdfToImage') {
         navigation.navigate('PdfToImage');
       } else if (route === 'ProtectPdf') {
@@ -323,6 +341,8 @@ export default function HomeScreen() {
         navigation.navigate('UnlockPdf');
       } else if (route === 'WordToPdf') {
         navigation.navigate('WordToPdf');
+      } else if (route === 'PdfToWord') {
+        navigation.navigate('PdfToWord');
       } else {
         navigation.navigate(route as any);
       }
@@ -437,7 +457,7 @@ export default function HomeScreen() {
           <View style={styles.statsContent}>
             <View style={styles.statItem}>
               <Text style={[styles.statValue, { color: colors.textOnPrimary }]}>
-                13
+                15
               </Text>
               <Text style={[styles.statLabel, { color: isDark ? theme.textSecondary : 'rgba(255,255,255,0.8)' }]}>
                 Tools

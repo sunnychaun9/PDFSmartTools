@@ -25,10 +25,12 @@ export type RootStackParamList = {
   SignPdf: { signatureBase64?: string } | undefined;
   SignatureCreate: { returnTo?: 'SignPdf' } | undefined;
   SplitPdf: undefined;
+  OrganizePages: undefined;
   PdfToImage: undefined;
   ProtectPdf: undefined;
   UnlockPdf: undefined;
   WordToPdf: undefined;
+  PdfToWord: undefined;
   Pro: undefined;
   FilePicker: { mode: 'pdf' | 'image'; returnRoute: keyof RootStackParamList };
 };

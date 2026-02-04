@@ -80,7 +80,8 @@ class PdfProtectorModule(private val reactContext: ReactApplicationContext) :
                     document?.close()
                 }
             } catch (e: Exception) {
-                promise.reject("VALIDATION_ERROR", e.message ?: "Failed to validate PDF", e)
+                // FIX: Post-audit hardening – never expose raw exception message
+                promise.reject("VALIDATION_ERROR", "Failed to validate PDF")
             }
         }
     }

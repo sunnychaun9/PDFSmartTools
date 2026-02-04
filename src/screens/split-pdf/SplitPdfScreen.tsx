@@ -10,8 +10,9 @@ import {
 } from 'react-native';
 import { SafeScreen, Header, Spacer } from '../../components/layout';
 import { Button, Text, Icon, AppModal } from '../../components/ui';
-import { ProgressBar } from '../../components/feedback';
+import { ProgressModal } from '../../components/feedback';
 import { colors, spacing, borderRadius, shadows } from '../../theme';
+import { EnhancedProgress } from '../../utils/progressUtils';
 import { useTheme, useRating, useFeatureGate } from '../../context';
 import { pickPdfFile, PickedFile, cleanupPickedFile } from '../../services/filePicker';
 import {
@@ -73,10 +74,10 @@ export default function SplitPdfScreen() {
   const [rangeInput, setRangeInput] = useState('');
   const [selectedPages, setSelectedPages] = useState<Set<number>>(new Set());
   const [isSplitting, setIsSplitting] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [progressText, setProgressText] = useState('');
+  const [enhancedProgress, setEnhancedProgress] = useState<EnhancedProgress | null>(null);
   const [splitResult, setSplitResult] = useState<SplitResult | null>(null);
   const [remainingUses, setRemainingUses] = useState<number>(Infinity);
+  const splitStartTime = useRef<number>(0);
 
   // Modal states
   const [errorModal, setErrorModal] = useState<{
@@ -186,8 +187,16 @@ export default function SplitPdfScreen() {
     }
 
     setIsSplitting(true);
-    setProgress(0);
-    setProgressText('Initializing...');
+    splitStartTime.current = Date.now();
+    setEnhancedProgress({
+      progress: 0,
+      currentItem: 0,
+      totalItems: ranges.length,
+      status: 'Initializing...',
+      elapsedMs: 0,
+      estimatedRemainingMs: -1,
+      estimatedTotalMs: -1,
+    });
 
     try {
       const baseName = selectedFile.name.replace('.pdf', '');
@@ -196,8 +205,16 @@ export default function SplitPdfScreen() {
         ranges,
         isPro,
         onProgress: (progressInfo) => {
-          setProgress(progressInfo.progress);
-          setProgressText(progressInfo.status);
+          const elapsedMs = Date.now() - splitStartTime.current;
+          setEnhancedProgress({
+            progress: progressInfo.progress,
+            currentItem: 0,
+            totalItems: ranges.length,
+            status: progressInfo.status,
+            elapsedMs,
+            estimatedRemainingMs: -1,
+            estimatedTotalMs: -1,
+          });
         },
       });
 
@@ -253,8 +270,7 @@ export default function SplitPdfScreen() {
     setPageCount(0);
     setRangeInput('');
     setSelectedPages(new Set());
-    setProgress(0);
-    setProgressText('');
+    setEnhancedProgress(null);
   }, [selectedFile, splitResult]);
 
   // Empty state
@@ -537,35 +553,6 @@ export default function SplitPdfScreen() {
           </>
         )}
 
-        <Spacer size="lg" />
-
-        {/* Progress */}
-        {isSplitting && (
-          <>
-            <Spacer size="lg" />
-            <View style={[styles.progressCard, { backgroundColor: theme.surface }, shadows.card]}>
-              <View style={styles.progressHeader}>
-                <View style={[styles.progressSpinner, { backgroundColor: `${colors.splitPdf}15` }]}>
-                  <Text style={{ fontSize: 24 }}>✂️</Text>
-                </View>
-                <View style={styles.progressInfo}>
-                  <Text variant="body" style={{ color: theme.textPrimary }}>
-                    Splitting PDF
-                  </Text>
-                  <Text variant="caption" style={{ color: theme.textTertiary }}>
-                    {progressText}
-                  </Text>
-                </View>
-                <Text variant="h3" customColor={colors.splitPdf}>
-                  {progress}%
-                </Text>
-              </View>
-              <Spacer size="md" />
-              <ProgressBar progress={progress} height={10} progressColor={colors.splitPdf} />
-            </View>
-          </>
-        )}
-
         <Spacer size="xl" />
       </ScrollView>
 
@@ -606,6 +593,15 @@ export default function SplitPdfScreen() {
             onPress: () => setErrorModal((prev) => ({ ...prev, visible: false })),
           },
         ]}
+      />
+
+      <ProgressModal
+        visible={isSplitting}
+        title="Splitting PDF"
+        progress={enhancedProgress}
+        color={colors.splitPdf}
+        icon="✂️"
+        cancelable={false}
       />
     </SafeScreen>
   );
@@ -697,25 +693,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     padding: spacing.md,
     borderRadius: borderRadius.lg,
-  },
-  progressCard: {
-    borderRadius: borderRadius.xl,
-    padding: spacing.lg,
-  },
-  progressHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  progressSpinner: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.md,
-  },
-  progressInfo: {
-    flex: 1,
   },
   resultCard: {
     padding: spacing.xl,

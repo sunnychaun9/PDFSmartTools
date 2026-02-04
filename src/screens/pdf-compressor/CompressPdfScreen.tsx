@@ -3,7 +3,7 @@ import { View, StyleSheet, ScrollView, Pressable, Animated } from 'react-native'
 import { useRoute, RouteProp } from '@react-navigation/native';
 import { SafeScreen, Header, Spacer } from '../../components/layout';
 import { Button, Text, Icon, Card, AppModal } from '../../components/ui';
-import { ProgressBar } from '../../components/feedback';
+import { ProgressModal } from '../../components/feedback';
 import { colors, spacing, borderRadius, shadows } from '../../theme';
 import { RootStackParamList } from '../../navigation/types';
 import {
@@ -18,6 +18,7 @@ import { useTheme, useRating, useFeatureGate } from '../../context';
 import { addRecentFile, formatFileSize } from '../../services/recentFilesService';
 import { sharePdfFile } from '../../services/shareService';
 import { getRemaining, FEATURES } from '../../services/usageLimitService';
+import { EnhancedProgress } from '../../utils/progressUtils';
 import RNFS from 'react-native-fs';
 
 type CompressPdfRouteProp = RouteProp<RootStackParamList, 'CompressPdf'>;
@@ -178,32 +179,6 @@ function CompressionLevelSelector({
   );
 }
 
-function CompressionProgress({
-  progress,
-  progressText,
-}: {
-  progress: number;
-  progressText: string;
-}) {
-  const { theme } = useTheme();
-
-  return (
-    <View style={[styles.progressCard, { backgroundColor: theme.surface }, shadows.card]}>
-      <View style={styles.progressHeader}>
-        <View style={[styles.progressSpinner, { backgroundColor: `${colors.primary}15` }]}>
-          <Text style={{ fontSize: 24 }}>📄</Text>
-        </View>
-        <View style={styles.progressInfo}>
-          <Text variant="body" style={{ color: theme.textPrimary }}>Compressing PDF</Text>
-          <Text variant="caption" style={{ color: theme.textTertiary }}>{progressText}</Text>
-        </View>
-        <Text variant="h3" customColor={colors.primary}>{progress}%</Text>
-      </View>
-      <Spacer size="md" />
-      <ProgressBar progress={progress} height={10} />
-    </View>
-  );
-}
 
 function ResultCard({
   result,
@@ -290,11 +265,11 @@ export default function CompressPdfScreen() {
   const [selectedFile, setSelectedFile] = useState<PickedFile | null>(null);
   const [selectedLevel, setSelectedLevel] = useState<CompressionLevel>('medium');
   const [isCompressing, setIsCompressing] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [progressText, setProgressText] = useState('');
+  const [enhancedProgress, setEnhancedProgress] = useState<EnhancedProgress | null>(null);
   const [compressionResult, setCompressionResult] = useState<CompressionResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [remainingUses, setRemainingUses] = useState<number>(Infinity);
+  const compressionStartTime = useRef<number>(0);
 
   // Modal states
   const [errorModal, setErrorModal] = useState<{
@@ -355,8 +330,16 @@ export default function CompressPdfScreen() {
     }
 
     setIsCompressing(true);
-    setProgress(0);
-    setProgressText('Initializing...');
+    compressionStartTime.current = Date.now();
+    setEnhancedProgress({
+      progress: 0,
+      currentItem: 0,
+      totalItems: 0,
+      status: 'Initializing...',
+      elapsedMs: 0,
+      estimatedRemainingMs: -1,
+      estimatedTotalMs: -1,
+    });
     setError(null);
     setCompressionResult(null);
 
@@ -364,10 +347,23 @@ export default function CompressPdfScreen() {
       const result = await compressPdf(selectedFile.localPath, {
         level: selectedLevel,
         onProgress: (progressInfo) => {
-          setProgress(progressInfo.progress);
-          setProgressText(
-            `Page ${progressInfo.currentPage} of ${progressInfo.totalPages}`
-          );
+          const elapsedMs = Date.now() - compressionStartTime.current;
+          const estimatedTotalMs = progressInfo.currentPage > 0
+            ? (elapsedMs / progressInfo.currentPage) * progressInfo.totalPages
+            : -1;
+          const estimatedRemainingMs = estimatedTotalMs > 0
+            ? Math.max(0, estimatedTotalMs - elapsedMs)
+            : -1;
+
+          setEnhancedProgress({
+            progress: progressInfo.progress,
+            currentItem: progressInfo.currentPage,
+            totalItems: progressInfo.totalPages,
+            status: `Compressing page ${progressInfo.currentPage}...`,
+            elapsedMs,
+            estimatedRemainingMs,
+            estimatedTotalMs,
+          });
         },
         isPro,
       });
@@ -438,8 +434,7 @@ export default function CompressPdfScreen() {
     }
     setSelectedFile(null);
     setCompressionResult(null);
-    setProgress(0);
-    setProgressText('');
+    setEnhancedProgress(null);
     setError(null);
   }, [selectedFile]);
 
@@ -578,15 +573,11 @@ export default function CompressPdfScreen() {
 
         <Spacer size="lg" />
 
-        {selectedFile && !isCompressing && (
+        {selectedFile && (
           <EstimatedSizeCard
             originalSize={selectedFile.size}
             selectedLevel={selectedLevel}
           />
-        )}
-
-        {isCompressing && (
-          <CompressionProgress progress={progress} progressText={progressText} />
         )}
 
         {error && (
@@ -651,6 +642,15 @@ export default function CompressPdfScreen() {
             onPress: () => setErrorModal((prev) => ({ ...prev, visible: false })),
           },
         ]}
+      />
+
+      <ProgressModal
+        visible={isCompressing}
+        title="Compressing PDF"
+        progress={enhancedProgress}
+        color={colors.compressPdf}
+        icon="📦"
+        cancelable={false}
       />
     </SafeScreen>
   );
@@ -767,25 +767,6 @@ const styles = StyleSheet.create({
   savingsBarFill: {
     height: '100%',
     borderRadius: borderRadius.full,
-  },
-  progressCard: {
-    borderRadius: borderRadius.xl,
-    padding: spacing.lg,
-  },
-  progressHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  progressSpinner: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.md,
-  },
-  progressInfo: {
-    flex: 1,
   },
   resultCardInner: {
     padding: spacing.xl,

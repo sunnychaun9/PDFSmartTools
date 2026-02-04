@@ -3,9 +3,10 @@ import { View, StyleSheet, ScrollView, Pressable, Animated, Image } from 'react-
 import { launchImageLibrary, launchCamera } from 'react-native-image-picker';
 import { SafeScreen, Header, Spacer } from '../../components/layout';
 import { Button, Text, Icon, AppModal } from '../../components/ui';
-import { ProgressBar } from '../../components/feedback';
+import { ProgressModal } from '../../components/feedback';
 import { useProGate, UpgradePromptModal } from '../../components/subscription';
 import { colors, spacing, borderRadius, shadows } from '../../theme';
+import { EnhancedProgress } from '../../utils/progressUtils';
 import {
   recognizeText,
   OcrResult,
@@ -25,33 +26,6 @@ type SelectedImage = {
   localPath: string;
   fileName: string;
 };
-
-function OcrProgress({
-  progress,
-  progressText,
-}: {
-  progress: number;
-  progressText: string;
-}) {
-  const { theme } = useTheme();
-
-  return (
-    <View style={[styles.progressCard, { backgroundColor: theme.surface }, shadows.card]}>
-      <View style={styles.progressHeader}>
-        <View style={[styles.progressSpinner, { backgroundColor: `${colors.ocrExtract}15` }]}>
-          <Text style={{ fontSize: 24 }}>🔍</Text>
-        </View>
-        <View style={styles.progressInfo}>
-          <Text variant="body" style={{ color: theme.textPrimary }}>Extracting Text</Text>
-          <Text variant="caption" style={{ color: theme.textTertiary }}>{progressText}</Text>
-        </View>
-        <Text variant="h3" customColor={colors.ocrExtract}>{progress}%</Text>
-      </View>
-      <Spacer size="md" />
-      <ProgressBar progress={progress} height={10} progressColor={colors.ocrExtract} />
-    </View>
-  );
-}
 
 function ResultCard({
   result,
@@ -142,12 +116,12 @@ export default function OcrScreen() {
 
   const [selectedImage, setSelectedImage] = useState<SelectedImage | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [progressText, setProgressText] = useState('');
+  const [enhancedProgress, setEnhancedProgress] = useState<EnhancedProgress | null>(null);
   const [ocrResult, setOcrResult] = useState<OcrResult | null>(null);
   const [remainingUses, setRemainingUses] = useState<number>(Infinity);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [showSourceModal, setShowSourceModal] = useState(false);
+  const ocrStartTime = useRef<number>(0);
 
   // Modal states
   const [errorModal, setErrorModal] = useState<{
@@ -271,15 +245,31 @@ export default function OcrScreen() {
     }
 
     setIsProcessing(true);
-    setProgress(0);
-    setProgressText('Initializing...');
+    ocrStartTime.current = Date.now();
+    setEnhancedProgress({
+      progress: 0,
+      currentItem: 0,
+      totalItems: 0,
+      status: 'Initializing...',
+      elapsedMs: 0,
+      estimatedRemainingMs: -1,
+      estimatedTotalMs: -1,
+    });
     setOcrResult(null);
 
     try {
       const result = await recognizeText(selectedImage.localPath, {
         onProgress: (progressInfo) => {
-          setProgress(progressInfo.progress);
-          setProgressText(progressInfo.status);
+          const elapsedMs = Date.now() - ocrStartTime.current;
+          setEnhancedProgress({
+            progress: progressInfo.progress,
+            currentItem: 0,
+            totalItems: 0,
+            status: progressInfo.status,
+            elapsedMs,
+            estimatedRemainingMs: -1,
+            estimatedTotalMs: -1,
+          });
         },
         isPro,
       });
@@ -327,8 +317,7 @@ export default function OcrScreen() {
     }
     setSelectedImage(null);
     setOcrResult(null);
-    setProgress(0);
-    setProgressText('');
+    setEnhancedProgress(null);
   }, [selectedImage]);
 
   // Empty state
@@ -516,10 +505,6 @@ export default function OcrScreen() {
           </Text>
         </View>
 
-        <Spacer size="lg" />
-
-        {isProcessing && <OcrProgress progress={progress} progressText={progressText} />}
-
         <Spacer size="xl" />
       </ScrollView>
 
@@ -596,6 +581,15 @@ export default function OcrScreen() {
           },
         ]}
       />
+
+      <ProgressModal
+        visible={isProcessing}
+        title="Extracting Text"
+        progress={enhancedProgress}
+        color={colors.ocrExtract}
+        icon="🔍"
+        cancelable={false}
+      />
     </SafeScreen>
   );
 }
@@ -652,25 +646,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     padding: spacing.md,
     borderRadius: borderRadius.lg,
-  },
-  progressCard: {
-    borderRadius: borderRadius.xl,
-    padding: spacing.lg,
-  },
-  progressHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  progressSpinner: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.md,
-  },
-  progressInfo: {
-    flex: 1,
   },
   resultCardInner: {
     padding: spacing.xl,

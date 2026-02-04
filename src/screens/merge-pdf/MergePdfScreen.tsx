@@ -15,7 +15,9 @@ import DraggableFlatList, {
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeScreen, Header, Spacer } from '../../components/layout';
 import { Button, Text, Icon, AppModal } from '../../components/ui';
+import { ProgressModal } from '../../components/feedback';
 import { colors, spacing, borderRadius, shadows } from '../../theme';
+import { EnhancedProgress } from '../../utils/progressUtils';
 import { RootStackParamList } from '../../navigation/types';
 import { useTheme, useRating, useFeatureGate } from '../../context';
 import { pickPdfFile, cleanupPickedFile, type PickedFile } from '../../services/filePicker';
@@ -47,10 +49,10 @@ export default function MergePdfScreen() {
   // State
   const [selectedFiles, setSelectedFiles] = useState<PdfFile[]>([]);
   const [isMerging, setIsMerging] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [progressText, setProgressText] = useState('');
+  const [enhancedProgress, setEnhancedProgress] = useState<EnhancedProgress | null>(null);
   const [mergeResult, setMergeResult] = useState<MergeResult | null>(null);
   const [remainingUses, setRemainingUses] = useState<number>(Infinity);
+  const mergeStartTime = useRef<number>(0);
 
   // Modal states
   const [errorModal, setErrorModal] = useState<{
@@ -142,8 +144,16 @@ export default function MergePdfScreen() {
     }
 
     setIsMerging(true);
-    setProgress(0);
-    setProgressText('Preparing files...');
+    mergeStartTime.current = Date.now();
+    setEnhancedProgress({
+      progress: 0,
+      currentItem: 0,
+      totalItems: selectedFiles.length,
+      status: 'Preparing files...',
+      elapsedMs: 0,
+      estimatedRemainingMs: -1,
+      estimatedTotalMs: -1,
+    });
 
     try {
       const inputPaths = selectedFiles.map((f) => f.localPath);
@@ -151,8 +161,23 @@ export default function MergePdfScreen() {
       const result = await mergePdfs(inputPaths, {
         isPro,
         onProgress: ({ progress: p, currentFile, totalFiles }) => {
-          setProgress(p);
-          setProgressText(`Merging file ${currentFile} of ${totalFiles}...`);
+          const elapsedMs = Date.now() - mergeStartTime.current;
+          const estimatedTotalMs = currentFile > 0
+            ? (elapsedMs / currentFile) * totalFiles
+            : -1;
+          const estimatedRemainingMs = estimatedTotalMs > 0
+            ? Math.max(0, estimatedTotalMs - elapsedMs)
+            : -1;
+
+          setEnhancedProgress({
+            progress: p,
+            currentItem: currentFile,
+            totalItems: totalFiles,
+            status: `Merging file ${currentFile}...`,
+            elapsedMs,
+            estimatedRemainingMs,
+            estimatedTotalMs,
+          });
         },
       });
 
@@ -218,8 +243,7 @@ export default function MergePdfScreen() {
     }
     setSelectedFiles([]);
     setMergeResult(null);
-    setProgress(0);
-    setProgressText('');
+    setEnhancedProgress(null);
   }, [selectedFiles]);
 
   const renderFileItem = useCallback(
@@ -460,27 +484,6 @@ export default function MergePdfScreen() {
             renderItem={renderFileItem}
             contentContainerStyle={styles.listContent}
           />
-
-          {isMerging && (
-            <View style={[styles.progressContainer, { backgroundColor: theme.surfaceVariant }]}>
-              <View style={styles.progressHeader}>
-                <Text variant="body" style={{ color: theme.textPrimary }}>
-                  {progressText}
-                </Text>
-                <Text variant="body" style={{ color: colors.primary, fontWeight: '600' }}>
-                  {progress}%
-                </Text>
-              </View>
-              <View style={[styles.progressBar, { backgroundColor: theme.border }]}>
-                <Animated.View
-                  style={[
-                    styles.progressFill,
-                    { width: `${progress}%`, backgroundColor: colors.primary },
-                  ]}
-                />
-              </View>
-            </View>
-          )}
         </View>
 
         <View style={[styles.footer, { backgroundColor: theme.surface, borderTopColor: theme.border }]}>
@@ -544,6 +547,15 @@ export default function MergePdfScreen() {
               onPress: () => setErrorModal((prev) => ({ ...prev, visible: false })),
             },
           ]}
+        />
+
+        <ProgressModal
+          visible={isMerging}
+          title="Merging PDFs"
+          progress={enhancedProgress}
+          color={colors.mergePdf}
+          icon="📑"
+          cancelable={false}
         />
       </SafeScreen>
     </GestureHandlerRootView>
@@ -621,25 +633,6 @@ const styles = StyleSheet.create({
   },
   removeButton: {
     padding: spacing.sm,
-  },
-  progressContainer: {
-    margin: spacing.lg,
-    padding: spacing.md,
-    borderRadius: borderRadius.lg,
-  },
-  progressHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm,
-  },
-  progressBar: {
-    height: 6,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 3,
   },
   footer: {
     padding: spacing.lg,

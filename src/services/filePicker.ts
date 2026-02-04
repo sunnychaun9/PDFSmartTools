@@ -1,5 +1,6 @@
 import { NativeModules, Platform } from 'react-native';
 import RNFS from 'react-native-fs';
+import { analyzePdf, PreflightResult, PreflightSeverity } from './pdfPreflightService';
 
 const { FilePicker } = NativeModules;
 
@@ -15,6 +16,10 @@ export type PickedFile = {
   localPath: string;
   isLargeFile: boolean;
   sizeWarning?: string;
+  // PDF-specific preflight data (only for PDF files)
+  pageCount?: number;
+  preflight?: PreflightResult;
+  preflightSeverity?: PreflightSeverity;
 };
 
 function formatFileSize(bytes: number): string {
@@ -106,6 +111,24 @@ export async function pickPdfFile(): Promise<PickedFile | null> {
       sizeWarning = `This file is ${formatFileSize(size)}. Processing may take a moment.`;
     }
 
+    // Run preflight analysis for PDFs
+    let preflight: PreflightResult | undefined;
+    let pageCount: number | undefined;
+    let preflightSeverity: PreflightSeverity | undefined;
+
+    try {
+      preflight = await analyzePdf(localPath);
+      pageCount = preflight.pageCount;
+      preflightSeverity = preflight.severity;
+
+      // Update warning with preflight info if more severe
+      if (preflight.shouldWarn && preflight.warningMessage) {
+        sizeWarning = preflight.warningMessage;
+      }
+    } catch {
+      // Preflight analysis failed - continue without it
+    }
+
     return {
       uri: result.uri,
       name: result.name,
@@ -114,6 +137,9 @@ export async function pickPdfFile(): Promise<PickedFile | null> {
       localPath,
       isLargeFile,
       sizeWarning,
+      pageCount,
+      preflight,
+      preflightSeverity,
     };
   } catch (error) {
     if (error instanceof Error) {

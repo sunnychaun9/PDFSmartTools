@@ -125,6 +125,12 @@ class ScanPdfModule(reactContext: ReactApplicationContext) : ReactContextBaseJav
                 Log.e(TAG, "Permission denied during PDF generation", e)
                 pdf?.close()
                 promise.reject("PERMISSION_DENIED", "Storage permission was revoked. Please grant permission and try again.")
+            } catch (e: OutOfMemoryError) {
+                // FIX: OOM protection – explicit handling
+                Log.e(TAG, "Out of memory during PDF generation", e)
+                pdf?.close()
+                System.gc()
+                promise.reject("OUT_OF_MEMORY", "Not enough memory to process these images. Try with fewer or smaller images.")
             } catch (e: Exception) {
                 Log.e(TAG, "PDF generation failed", e)
                 pdf?.close()
@@ -262,6 +268,11 @@ class ScanPdfModule(reactContext: ReactApplicationContext) : ReactContextBaseJav
                 // FIX: Post-audit hardening – graceful permission revocation handling
                 Log.e(TAG, "Permission denied during image processing", e)
                 promise.reject("PERMISSION_DENIED", "Storage permission was revoked. Please grant permission and try again.")
+            } catch (e: OutOfMemoryError) {
+                // FIX: OOM protection – explicit handling
+                Log.e(TAG, "Out of memory during image processing", e)
+                System.gc()
+                promise.reject("OUT_OF_MEMORY", "Not enough memory to process this image. Try with a smaller image.")
             } catch (e: Exception) {
                 Log.e(TAG, "Image processing failed", e)
                 // FIX: Post-audit hardening – sanitize error messages
@@ -404,6 +415,11 @@ class ScanPdfModule(reactContext: ReactApplicationContext) : ReactContextBaseJav
                 // FIX: Post-audit hardening – graceful permission revocation handling
                 Log.e(TAG, "Permission denied during rotation", e)
                 promise.reject("PERMISSION_DENIED", "Storage permission was revoked. Please grant permission and try again.")
+            } catch (e: OutOfMemoryError) {
+                // FIX: OOM protection – explicit handling
+                Log.e(TAG, "Out of memory during rotation", e)
+                System.gc()
+                promise.reject("OUT_OF_MEMORY", "Not enough memory to rotate this image. Try with a smaller image.")
             } catch (e: Exception) {
                 Log.e(TAG, "Rotation failed", e)
                 // FIX: Post-audit hardening – sanitize error messages

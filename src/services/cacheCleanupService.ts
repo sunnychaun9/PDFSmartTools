@@ -7,8 +7,19 @@ import RNFS from 'react-native-fs';
 // Threshold for stale files (24 hours)
 const STALE_FILE_THRESHOLD_MS = 24 * 60 * 60 * 1000;
 
-// File patterns to clean up
-const TEMP_FILE_PATTERNS = ['.tmp', '_temp', '_cache'];
+// File patterns to clean up (from interrupted operations)
+const TEMP_FILE_PATTERNS = [
+  '.tmp',        // Generic temp files
+  '_temp',       // Temp suffix
+  '_cache',      // Cache suffix
+  '.tmp_',       // Atomic write temp files
+  'thumbnails_', // Thumbnail directories
+  'converted_',  // Converted files
+  'edited_',     // Edited files
+  'rotated_',    // Rotated images
+  'page_',       // Page thumbnails
+  'searchable_', // OCR output
+];
 
 /**
  * Cleanup stale temp files from cache directory
@@ -22,12 +33,9 @@ export async function cleanupStaleTempFiles(): Promise<void> {
 
     for (const file of files) {
       try {
-        // Skip directories
-        if (file.isDirectory()) continue;
-
-        // Check if file matches temp file pattern
+        // Check if file/directory matches temp pattern
         const isTempFile = TEMP_FILE_PATTERNS.some(pattern =>
-          file.name.includes(pattern)
+          file.name.includes(pattern) || file.name.startsWith(pattern)
         );
 
         // Also check for old timestamp-prefixed files (our cache pattern)
@@ -39,9 +47,14 @@ export async function cleanupStaleTempFiles(): Promise<void> {
         const mtime = file.mtime ? new Date(file.mtime).getTime() : 0;
         const isStale = (now - mtime) > STALE_FILE_THRESHOLD_MS;
 
-        // Delete if it's a stale temp file
+        // Delete if it's a stale temp file or directory
         if ((isTempFile && isStale) || isOldCacheFile) {
-          await RNFS.unlink(file.path);
+          if (file.isDirectory()) {
+            // Recursively delete directory
+            await deleteDirectoryRecursive(file.path);
+          } else {
+            await RNFS.unlink(file.path);
+          }
         }
       } catch {
         // Ignore errors for individual files - best effort cleanup
@@ -49,6 +62,25 @@ export async function cleanupStaleTempFiles(): Promise<void> {
     }
   } catch {
     // Ignore errors - cleanup is best-effort and non-blocking
+  }
+}
+
+/**
+ * Recursively delete a directory and its contents
+ */
+async function deleteDirectoryRecursive(dirPath: string): Promise<void> {
+  try {
+    const files = await RNFS.readDir(dirPath);
+    for (const file of files) {
+      if (file.isDirectory()) {
+        await deleteDirectoryRecursive(file.path);
+      } else {
+        await RNFS.unlink(file.path);
+      }
+    }
+    await RNFS.unlink(dirPath);
+  } catch {
+    // Ignore errors
   }
 }
 

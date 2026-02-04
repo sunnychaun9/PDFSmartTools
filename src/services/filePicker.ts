@@ -25,9 +25,42 @@ function formatFileSize(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
+// FIX: Post-audit hardening – comprehensive filename sanitization
+function sanitizeFileName(fileName: string): string {
+  // Step 1: Normalize unicode to ASCII equivalents where possible
+  // This prevents homograph attacks (е vs e, etc.)
+  let safeName = fileName.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+
+  // Step 2: Replace any non-alphanumeric characters except dots and hyphens
+  safeName = safeName.replace(/[^a-zA-Z0-9.-]/g, '_');
+
+  // Step 3: Collapse multiple consecutive dots to prevent path traversal
+  safeName = safeName.replace(/\.{2,}/g, '_');
+
+  // Step 4: Remove leading dots to prevent hidden files
+  safeName = safeName.replace(/^\.+/, '');
+
+  // Step 5: Remove leading/trailing underscores and hyphens
+  safeName = safeName.replace(/^[-_]+|[-_]+$/g, '');
+
+  // Step 6: Ensure extension is preserved if valid
+  const lastDotIndex = safeName.lastIndexOf('.');
+  if (lastDotIndex === -1 || lastDotIndex === safeName.length - 1) {
+    // No valid extension, add default
+    safeName = safeName.replace(/\.+$/, '') + '.pdf';
+  }
+
+  // Step 7: Ensure non-empty name
+  if (!safeName || safeName === '.pdf') {
+    safeName = 'document.pdf';
+  }
+
+  return safeName;
+}
+
 async function copyToCache(uri: string, fileName: string): Promise<string> {
   const timestamp = Date.now();
-  const safeName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+  const safeName = sanitizeFileName(fileName);
   const cachePath = `${RNFS.CachesDirectoryPath}/${timestamp}_${safeName}`;
 
   if (uri.startsWith('content://')) {

@@ -62,6 +62,7 @@ class PdfProtectorModule(private val reactContext: ReactApplicationContext) :
                     }
                     promise.resolve(result)
                 } catch (e: Exception) {
+                    // FIX: Post-audit hardening – sanitize error messages to prevent password leakage
                     when {
                         e.message?.contains("password", ignoreCase = true) == true -> {
                             promise.reject("PDF_ENCRYPTED", "This PDF is already password protected")
@@ -71,7 +72,8 @@ class PdfProtectorModule(private val reactContext: ReactApplicationContext) :
                             promise.reject("PDF_CORRUPT", "This PDF file is corrupt or invalid")
                         }
                         else -> {
-                            promise.reject("PDF_INVALID", "Cannot read this PDF file: ${e.message}")
+                            // Never expose raw exception message - may contain sensitive data
+                            promise.reject("PDF_INVALID", "Cannot read this PDF file")
                         }
                     }
                 } finally {
@@ -198,6 +200,7 @@ class PdfProtectorModule(private val reactContext: ReactApplicationContext) :
             } catch (e: OutOfMemoryError) {
                 promise.reject("OUT_OF_MEMORY", "Not enough memory to process this PDF", e)
             } catch (e: Exception) {
+                // FIX: Post-audit hardening – sanitize error messages to prevent password leakage
                 val errorMessage = when {
                     e.message?.contains("password", ignoreCase = true) == true ->
                         "This PDF is already password protected"
@@ -205,9 +208,9 @@ class PdfProtectorModule(private val reactContext: ReactApplicationContext) :
                         "The PDF file is corrupt"
                     e.message?.contains("permission", ignoreCase = true) == true ->
                         "Cannot access the PDF file"
-                    else -> e.message ?: "Failed to protect PDF"
+                    else -> "Failed to protect PDF" // Never expose raw exception message
                 }
-                promise.reject("PROTECTION_ERROR", errorMessage, e)
+                promise.reject("PROTECTION_ERROR", errorMessage)
             } finally {
                 try {
                     document?.close()

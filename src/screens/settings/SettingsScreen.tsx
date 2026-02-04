@@ -137,6 +137,8 @@ export default function SettingsScreen() {
   });
   const [showCompressionModal, setShowCompressionModal] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
+  // FIX: Post-audit hardening – add theme selector modal
+  const [showThemeModal, setShowThemeModal] = useState(false);
 
   // Animation
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -167,11 +169,14 @@ export default function SettingsScreen() {
     ]).start();
   }, [fadeAnim, slideAnim]);
 
-  const showModal = useCallback((type: 'compression' | 'location') => {
+  // FIX: Post-audit hardening – unified modal show/hide with theme support
+  const showModal = useCallback((type: 'compression' | 'location' | 'theme') => {
     if (type === 'compression') {
       setShowCompressionModal(true);
-    } else {
+    } else if (type === 'location') {
       setShowLocationModal(true);
+    } else {
+      setShowThemeModal(true);
     }
     Animated.spring(modalAnim, {
       toValue: 1,
@@ -181,7 +186,7 @@ export default function SettingsScreen() {
     }).start();
   }, [modalAnim]);
 
-  const hideModal = useCallback((type: 'compression' | 'location') => {
+  const hideModal = useCallback((type: 'compression' | 'location' | 'theme') => {
     Animated.timing(modalAnim, {
       toValue: 0,
       duration: 200,
@@ -189,11 +194,29 @@ export default function SettingsScreen() {
     }).start(() => {
       if (type === 'compression') {
         setShowCompressionModal(false);
-      } else {
+      } else if (type === 'location') {
         setShowLocationModal(false);
+      } else {
+        setShowThemeModal(false);
       }
     });
   }, [modalAnim]);
+
+  // FIX: Post-audit hardening – theme mode change handler
+  const handleThemeModeChange = useCallback((mode: 'light' | 'dark' | 'system') => {
+    setThemeMode(mode);
+    hideModal('theme');
+  }, [setThemeMode, hideModal]);
+
+  // FIX: Post-audit hardening – get theme mode display label
+  const getThemeModeLabel = useCallback(() => {
+    switch (themeMode) {
+      case 'light': return 'Light';
+      case 'dark': return 'Dark';
+      case 'system': return 'System default';
+      default: return 'System default';
+    }
+  }, [themeMode]);
 
   const handleCompressionChange = useCallback(async (level: CompressionLevel) => {
     setAppSettings(prev => ({ ...prev, defaultCompression: level }));
@@ -292,6 +315,7 @@ export default function SettingsScreen() {
         )}
 
         {/* Appearance Section */}
+        {/* FIX: Post-audit hardening – proper theme selector (light/dark/system) */}
         <Animated.View
           style={[
             styles.section,
@@ -311,22 +335,11 @@ export default function SettingsScreen() {
             <SettingItem
               icon="eye"
               iconColor={colors.primary}
-              title="Dark Mode"
-              subtitle={isDark ? 'On' : 'Off'}
-              showChevron={false}
+              title="Theme"
+              subtitle={getThemeModeLabel()}
               isDark={isDark}
               theme={theme}
-              rightElement={
-                <Switch
-                  value={isDark}
-                  onValueChange={toggleTheme}
-                  trackColor={{
-                    false: theme.border,
-                    true: colors.primaryLight,
-                  }}
-                  thumbColor={isDark ? colors.primary : theme.surface}
-                />
-              }
+              onPress={() => showModal('theme')}
             />
           </View>
         </Animated.View>
@@ -613,6 +626,111 @@ export default function SettingsScreen() {
                 >
                   <Text variant="body" style={{ color: '#FFFFFF', fontWeight: '600' }}>
                     Got it
+                  </Text>
+                </TouchableOpacity>
+              </Animated.View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
+      {/* FIX: Post-audit hardening – Theme Selection Modal */}
+      <Modal
+        visible={showThemeModal}
+        transparent
+        animationType="none"
+        onRequestClose={() => hideModal('theme')}
+      >
+        <TouchableWithoutFeedback onPress={() => hideModal('theme')}>
+          <View style={styles.modalOverlay}>
+            <TouchableWithoutFeedback>
+              <Animated.View
+                style={[
+                  styles.modalContent,
+                  {
+                    backgroundColor: theme.surface,
+                    transform: [
+                      {
+                        scale: modalAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0.9, 1],
+                        }),
+                      },
+                    ],
+                    opacity: modalAnim,
+                  },
+                ]}
+              >
+                <Text
+                  variant="h3"
+                  style={{ color: theme.textPrimary, marginBottom: spacing.lg }}
+                >
+                  Choose Theme
+                </Text>
+                {[
+                  { value: 'system' as const, label: 'System default', description: 'Follow device settings' },
+                  { value: 'light' as const, label: 'Light', description: 'Always use light theme' },
+                  { value: 'dark' as const, label: 'Dark', description: 'Always use dark theme' },
+                ].map((option, index) => (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={[
+                      styles.optionItem,
+                      {
+                        backgroundColor:
+                          themeMode === option.value
+                            ? `${colors.primary}15`
+                            : 'transparent',
+                        borderColor:
+                          themeMode === option.value
+                            ? colors.primary
+                            : theme.border,
+                      },
+                      index > 0 && { marginTop: spacing.sm },
+                    ]}
+                    onPress={() => handleThemeModeChange(option.value)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.optionContent}>
+                      <View style={styles.optionHeader}>
+                        <Text
+                          variant="body"
+                          style={{
+                            color: theme.textPrimary,
+                            fontWeight:
+                              themeMode === option.value
+                                ? '600'
+                                : '400',
+                          }}
+                        >
+                          {option.label}
+                        </Text>
+                        {themeMode === option.value && (
+                          <View
+                            style={[
+                              styles.checkCircle,
+                              { backgroundColor: colors.primary },
+                            ]}
+                          >
+                            <Icon name="check" size={14} color="#FFFFFF" />
+                          </View>
+                        )}
+                      </View>
+                      <Text
+                        variant="caption"
+                        style={{ color: theme.textTertiary, marginTop: 2 }}
+                      >
+                        {option.description}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+                <TouchableOpacity
+                  style={[styles.cancelButton, { borderColor: theme.border }]}
+                  onPress={() => hideModal('theme')}
+                >
+                  <Text variant="body" style={{ color: theme.textSecondary }}>
+                    Cancel
                   </Text>
                 </TouchableOpacity>
               </Animated.View>

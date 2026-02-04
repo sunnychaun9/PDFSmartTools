@@ -154,8 +154,9 @@ class PdfOcrEngine(private val context: Context) {
                 // Calculate optimal bitmap dimensions
                 val (bitmapWidth, bitmapHeight) = calculateOptimalDimensions(pageWidth, pageHeight)
 
-                // Create bitmap for page rendering
-                val pageBitmap = Bitmap.createBitmap(bitmapWidth, bitmapHeight, Bitmap.Config.ARGB_8888)
+                // FIX: Post-audit hardening – use RGB_565 (2 bytes/pixel) instead of ARGB_8888 (4 bytes/pixel)
+                // Alpha channel not needed for OCR processing
+                val pageBitmap = Bitmap.createBitmap(bitmapWidth, bitmapHeight, Bitmap.Config.RGB_565)
                 pageBitmap.eraseColor(Color.WHITE)
 
                 // Render PDF page to bitmap
@@ -209,10 +210,8 @@ class PdfOcrEngine(private val context: Context) {
                     }
                 }
 
-                // Force garbage collection periodically for large PDFs
-                if (pageIndex > 0 && pageIndex % 5 == 0) {
-                    System.gc()
-                }
+                // FIX: Post-audit hardening – removed ineffective System.gc() call
+                // Bitmaps are properly recycled after each page, which is sufficient
             }
 
             progressCallback.onProgress(95, pageCount, pageCount, "Saving searchable PDF...")
@@ -310,7 +309,8 @@ class PdfOcrEngine(private val context: Context) {
         val width = source.width
         val height = source.height
 
-        val result = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        // FIX: Post-audit hardening – use RGB_565 for memory efficiency (alpha not needed for OCR)
+        val result = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
         val canvas = Canvas(result)
 
         // Create color matrix for grayscale conversion with contrast enhancement

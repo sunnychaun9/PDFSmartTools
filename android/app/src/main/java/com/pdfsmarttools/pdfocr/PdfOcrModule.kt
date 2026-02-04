@@ -134,22 +134,22 @@ class PdfOcrModule(private val reactContext: ReactApplicationContext) :
                     e
                 )
             } catch (e: SecurityException) {
+                // FIX: Post-audit hardening – graceful permission revocation handling
                 promise.reject(
                     "OCR_PERMISSION_DENIED",
-                    "Permission denied to access the file: ${e.message}",
-                    e
+                    "Storage permission was revoked. Please grant permission and try again."
                 )
             } catch (e: IllegalArgumentException) {
+                // FIX: Post-audit hardening – sanitize error messages
                 promise.reject(
                     "OCR_INVALID_INPUT",
-                    e.message ?: "Invalid input provided",
-                    e
+                    "Invalid input provided"
                 )
             } catch (e: Exception) {
+                // FIX: Post-audit hardening – never expose raw exception messages
                 promise.reject(
                     "OCR_ERROR",
-                    e.message ?: "Unknown error during OCR processing",
-                    e
+                    "Failed to process PDF for text recognition"
                 )
             } finally {
                 isProcessing.set(false)

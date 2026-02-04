@@ -87,14 +87,16 @@ class PdfUnlockModule(private val reactContext: ReactApplicationContext) :
                             promise.reject("PDF_CORRUPT", "This PDF file is corrupt or invalid")
                         }
                         else -> {
-                            promise.reject("PDF_INVALID", "Cannot read this PDF file: ${e.message}")
+                            // FIX: Post-audit hardening – never expose raw exception message
+                            promise.reject("PDF_INVALID", "Cannot read this PDF file")
                         }
                     }
                 } finally {
                     document?.close()
                 }
             } catch (e: Exception) {
-                promise.reject("VALIDATION_ERROR", e.message ?: "Failed to validate PDF", e)
+                // FIX: Post-audit hardening – sanitize error messages to prevent password leakage
+                promise.reject("VALIDATION_ERROR", "Failed to validate PDF")
             }
         }
     }
@@ -232,10 +234,11 @@ class PdfUnlockModule(private val reactContext: ReactApplicationContext) :
                     }
                     else -> {
                         errorCode = "UNLOCK_ERROR"
-                        errorMessage = e.message ?: "Failed to unlock PDF"
+                        // FIX: Post-audit hardening – never expose raw exception message
+                        errorMessage = "Failed to unlock PDF"
                     }
                 }
-                promise.reject(errorCode, errorMessage, e)
+                promise.reject(errorCode, errorMessage)
             } finally {
                 try {
                     document?.close()

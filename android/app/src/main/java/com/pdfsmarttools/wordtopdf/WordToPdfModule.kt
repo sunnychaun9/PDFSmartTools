@@ -119,7 +119,10 @@ class WordToPdfModule(private val reactContext: ReactApplicationContext) :
                 promise.resolve(response)
 
             } catch (e: OutOfMemoryError) {
-                promise.reject("OUT_OF_MEMORY", "Not enough memory to convert this document", e)
+                promise.reject("OUT_OF_MEMORY", "Not enough memory to convert this document")
+            } catch (e: SecurityException) {
+                // FIX: Post-audit hardening – graceful permission revocation handling
+                promise.reject("PERMISSION_DENIED", "Storage permission was revoked. Please grant permission and try again.")
             } catch (e: Exception) {
                 val errorCode: String
                 val errorMessage: String
@@ -138,10 +141,11 @@ class WordToPdfModule(private val reactContext: ReactApplicationContext) :
                     }
                     else -> {
                         errorCode = "CONVERSION_FAILED"
-                        errorMessage = e.message ?: "Failed to convert document"
+                        // FIX: Post-audit hardening – never expose raw exception message
+                        errorMessage = "Failed to convert document"
                     }
                 }
-                promise.reject(errorCode, errorMessage, e)
+                promise.reject(errorCode, errorMessage)
             } finally {
                 try {
                     pdfDocument?.close()

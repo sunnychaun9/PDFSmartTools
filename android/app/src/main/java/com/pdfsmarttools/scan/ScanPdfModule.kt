@@ -120,10 +120,16 @@ class ScanPdfModule(reactContext: ReactApplicationContext) : ReactContextBaseJav
                 result.putString("fileName", fileName)
                 result.putInt("pageCount", pagesAdded)
                 promise.resolve(result)
+            } catch (e: SecurityException) {
+                // FIX: Post-audit hardening – graceful permission revocation handling
+                Log.e(TAG, "Permission denied during PDF generation", e)
+                pdf?.close()
+                promise.reject("PERMISSION_DENIED", "Storage permission was revoked. Please grant permission and try again.")
             } catch (e: Exception) {
                 Log.e(TAG, "PDF generation failed", e)
                 pdf?.close()
-                promise.reject("PDF_ERROR", e.message ?: "Unknown error", e)
+                // FIX: Post-audit hardening – sanitize error messages
+                promise.reject("PDF_ERROR", "Failed to generate PDF")
             }
         }
     }
@@ -173,9 +179,14 @@ class ScanPdfModule(reactContext: ReactApplicationContext) : ReactContextBaseJav
                 result.putString("uri", uri.toString())
                 result.putBoolean("success", true)
                 promise.resolve(result)
+            } catch (e: SecurityException) {
+                // FIX: Post-audit hardening – graceful permission revocation handling
+                Log.e(TAG, "Permission denied during save", e)
+                promise.reject("PERMISSION_DENIED", "Storage permission was revoked. Please grant permission and try again.")
             } catch (e: Exception) {
                 Log.e(TAG, "Save to downloads failed", e)
-                promise.reject("SAVE_ERROR", e.message, e)
+                // FIX: Post-audit hardening – sanitize error messages
+                promise.reject("SAVE_ERROR", "Failed to save PDF to Downloads")
             }
         }
     }
@@ -247,9 +258,14 @@ class ScanPdfModule(reactContext: ReactApplicationContext) : ReactContextBaseJav
                 result.putBoolean("success", true)
                 result.putInt("processingTimeMs", elapsed.toInt())
                 promise.resolve(result)
+            } catch (e: SecurityException) {
+                // FIX: Post-audit hardening – graceful permission revocation handling
+                Log.e(TAG, "Permission denied during image processing", e)
+                promise.reject("PERMISSION_DENIED", "Storage permission was revoked. Please grant permission and try again.")
             } catch (e: Exception) {
                 Log.e(TAG, "Image processing failed", e)
-                promise.reject("PROCESS_ERROR", e.message, e)
+                // FIX: Post-audit hardening – sanitize error messages
+                promise.reject("PROCESS_ERROR", "Failed to process image")
             }
         }
     }
@@ -384,9 +400,14 @@ class ScanPdfModule(reactContext: ReactApplicationContext) : ReactContextBaseJav
                 result.putString("path", outFile.absolutePath)
                 result.putBoolean("success", true)
                 promise.resolve(result)
+            } catch (e: SecurityException) {
+                // FIX: Post-audit hardening – graceful permission revocation handling
+                Log.e(TAG, "Permission denied during rotation", e)
+                promise.reject("PERMISSION_DENIED", "Storage permission was revoked. Please grant permission and try again.")
             } catch (e: Exception) {
                 Log.e(TAG, "Rotation failed", e)
-                promise.reject("ROTATE_ERROR", e.message, e)
+                // FIX: Post-audit hardening – sanitize error messages
+                promise.reject("ROTATE_ERROR", "Failed to rotate image")
             }
         }
     }

@@ -14,6 +14,8 @@ import {
   onUpdateDownloaded,
 } from '../services/inAppUpdateService';
 import { setupDeepLinkListener } from '../services/deepLinkingService';
+// FIX: Post-audit hardening – temp file cleanup on startup
+import { cleanupStaleTempFiles } from '../services/cacheCleanupService';
 
 type AppProvidersProps = {
   children: React.ReactNode;
@@ -244,6 +246,12 @@ function AppContent({ children }: { children: React.ReactNode }) {
     filePath: string;
     title?: string;
   } | null>(null);
+
+  // FIX: Post-audit hardening – cleanup stale temp files on startup
+  useEffect(() => {
+    // Run async cleanup - does NOT block app startup
+    cleanupStaleTempFiles();
+  }, []);
 
   // Setup deep link listener for PDF files
   useEffect(() => {

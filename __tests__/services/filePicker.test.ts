@@ -25,17 +25,43 @@ describe('filePicker constants', () => {
   });
 });
 
-describe('filePicker file name sanitization', () => {
-  // Test the sanitization regex pattern used in copyToCache
+describe('filePicker file name sanitization (hardened)', () => {
+  // FIX: Post-audit hardening – comprehensive filename sanitization
   const sanitizeFileName = (fileName: string): string => {
-    return fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+    // Step 1: Normalize unicode to ASCII equivalents where possible
+    let safeName = fileName.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+
+    // Step 2: Replace any non-alphanumeric characters except dots and hyphens
+    safeName = safeName.replace(/[^a-zA-Z0-9.-]/g, '_');
+
+    // Step 3: Collapse multiple consecutive dots to prevent path traversal
+    safeName = safeName.replace(/\.{2,}/g, '_');
+
+    // Step 4: Remove leading dots to prevent hidden files
+    safeName = safeName.replace(/^\.+/, '');
+
+    // Step 5: Remove leading/trailing underscores and hyphens
+    safeName = safeName.replace(/^[-_]+|[-_]+$/g, '');
+
+    // Step 6: Ensure extension is preserved if valid
+    const lastDotIndex = safeName.lastIndexOf('.');
+    if (lastDotIndex === -1 || lastDotIndex === safeName.length - 1) {
+      safeName = safeName.replace(/\.+$/, '') + '.pdf';
+    }
+
+    // Step 7: Ensure non-empty name
+    if (!safeName || safeName === '.pdf') {
+      safeName = 'document.pdf';
+    }
+
+    return safeName;
   };
 
   it('should preserve alphanumeric characters', () => {
     expect(sanitizeFileName('document123.pdf')).toBe('document123.pdf');
   });
 
-  it('should preserve dots', () => {
+  it('should preserve single dots for extension', () => {
     expect(sanitizeFileName('my.document.pdf')).toBe('my.document.pdf');
   });
 
@@ -52,22 +78,39 @@ describe('filePicker file name sanitization', () => {
   });
 
   it('should handle unicode characters', () => {
-    expect(sanitizeFileName('文档.pdf')).toBe('__.pdf');
+    // Unicode chars become underscores, leading underscores trimmed
+    expect(sanitizeFileName('文档.pdf')).toBe('document.pdf');
   });
 
-  it('should handle path-like names (security check)', () => {
-    // Note: Current sanitization doesn't fully prevent path traversal
-    // Dots at start are preserved - this is a potential security issue
-    // This test documents current behavior
-    expect(sanitizeFileName('../../../etc/passwd')).toBe('.._.._.._etc_passwd');
+  it('should prevent path traversal attacks', () => {
+    // Multiple dots collapsed to underscore, leading underscores trimmed
+    expect(sanitizeFileName('../../../etc/passwd')).toBe('etc_passwd.pdf');
   });
 
-  it('should handle empty extension', () => {
-    expect(sanitizeFileName('document')).toBe('document');
+  it('should prevent hidden file creation', () => {
+    // Leading dots are removed
+    expect(sanitizeFileName('.hidden.pdf')).toBe('hidden.pdf');
   });
 
-  it('should handle multiple dots', () => {
-    expect(sanitizeFileName('my...document...pdf')).toBe('my...document...pdf');
+  it('should handle empty extension by adding .pdf', () => {
+    expect(sanitizeFileName('document')).toBe('document.pdf');
+  });
+
+  it('should collapse multiple consecutive dots', () => {
+    expect(sanitizeFileName('my...document...pdf')).toBe('my_document_pdf.pdf');
+  });
+
+  it('should handle empty filename', () => {
+    expect(sanitizeFileName('')).toBe('document.pdf');
+  });
+
+  it('should handle only dots filename', () => {
+    expect(sanitizeFileName('...')).toBe('document.pdf');
+  });
+
+  it('should trim leading underscores', () => {
+    // Leading underscores are trimmed, trailing ones before extension preserved
+    expect(sanitizeFileName('___document___.pdf')).toBe('document___.pdf');
   });
 });
 

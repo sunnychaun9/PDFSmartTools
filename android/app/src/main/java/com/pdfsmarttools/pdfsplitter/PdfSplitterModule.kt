@@ -61,163 +61,167 @@ class PdfSplitterModule(private val reactContext: ReactApplicationContext) :
                     return@launch
                 }
 
-                // Open PDF for reading
-                val fileDescriptor = ParcelFileDescriptor.open(inputFile, ParcelFileDescriptor.MODE_READ_ONLY)
-                val pdfRenderer = PdfRenderer(fileDescriptor)
-                val totalPages = pdfRenderer.pageCount
+                // Use use() extension for automatic resource cleanup
+                ParcelFileDescriptor.open(inputFile, ParcelFileDescriptor.MODE_READ_ONLY).use { fileDescriptor ->
+                    PdfRenderer(fileDescriptor).use { pdfRenderer ->
+                        val totalPages = pdfRenderer.pageCount
 
-                sendProgressEvent(10, "Validating page ranges...")
+                        sendProgressEvent(10, "Validating page ranges...")
 
-                // Parse and validate page ranges
-                val pageRanges = mutableListOf<Pair<Int, Int>>()
-               for (i in 0 until ranges.size()) {
-                    val range = ranges.getString(i) ?: continue
-                    val parsed = parsePageRange(range, totalPages)
-                    if (parsed != null) {
-                        pageRanges.add(parsed)
-                    }
-                }
+                        // Parse and validate page ranges
+                        val pageRanges = mutableListOf<Pair<Int, Int>>()
+                        for (i in 0 until ranges.size()) {
+                            val range = ranges.getString(i) ?: continue
+                            val parsed = parsePageRange(range, totalPages)
+                            if (parsed != null) {
+                                pageRanges.add(parsed)
+                            }
+                        }
 
-
-                if (pageRanges.isEmpty()) {
-                    pdfRenderer.close()
-                    fileDescriptor.close()
-                    promise.reject("INVALID_RANGES", "No valid page ranges specified")
-                    return@launch
-                }
-
-                // For free users, validate that only first 2 pages are being split
-                if (!isPro) {
-                    for ((start, end) in pageRanges) {
-                        if (start > 2 || end > 2) {
-                            pdfRenderer.close()
-                            fileDescriptor.close()
-                            promise.reject(
-                                "PRO_REQUIRED",
-                                "Free users can only split the first 2 pages. Upgrade to Pro for unlimited access."
-                            )
+                        if (pageRanges.isEmpty()) {
+                            promise.reject("INVALID_RANGES", "No valid page ranges specified")
                             return@launch
                         }
-                    }
-                }
 
-                // Ensure output directory exists
-                val outputDirFile = File(outputDir)
-                if (!outputDirFile.exists()) {
-                    outputDirFile.mkdirs()
-                }
-
-                sendProgressEvent(20, "Splitting PDF...")
-
-                val outputFiles = Arguments.createArray()
-                val totalRanges = pageRanges.size
-                var completedRanges = 0
-
-                for ((start, end) in pageRanges) {
-                    val rangeStr = if (start == end) "$start" else "$start-$end"
-                    val outputFileName = "${baseName}_pages_$rangeStr.pdf"
-                    val outputPath = "$outputDir/$outputFileName"
-
-                    // Create new PDF for this range
-                    val pdfDocument = PdfDocument()
-                    var pagesProcessed = 0
-
-                    for (pageNum in start..end) {
-                        val pageIndex = pageNum - 1 // Convert to 0-based index
-                        val page = pdfRenderer.openPage(pageIndex)
-
-                        // Calculate dimensions with memory limits
-                        var width = page.width
-                        var height = page.height
-                        val originalWidth = width
-                        val originalHeight = height
-
-                        // Check if bitmap would be too large and reduce if necessary
-                        val pixelCount = width.toLong() * height.toLong()
-                        if (pixelCount > MAX_BITMAP_PIXELS) {
-                            val reductionFactor = Math.sqrt(MAX_BITMAP_PIXELS.toDouble() / pixelCount.toDouble())
-                            width = (width * reductionFactor).toInt()
-                            height = (height * reductionFactor).toInt()
-                            Log.d(TAG, "Page $pageNum: Reduced dimensions to ${width}x${height}")
-                        }
-
-                        // Use RGB_565 (2 bytes/pixel) instead of ARGB_8888 (4 bytes/pixel)
-                        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
-                        bitmap.eraseColor(Color.WHITE)
-                        page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                        page.close()
-
-                        // Create page in output document with original dimensions
-                        val pageInfo = PdfDocument.PageInfo.Builder(originalWidth, originalHeight, pageNum).create()
-                        val pdfPage = pdfDocument.startPage(pageInfo)
-
-                        // Scale bitmap to original dimensions if it was reduced
-                        if (width != originalWidth || height != originalHeight) {
-                            val destRect = android.graphics.Rect(0, 0, originalWidth, originalHeight)
-                            val paint = Paint().apply {
-                                isFilterBitmap = true
-                                isDither = true
+                        // For free users, validate that only first 2 pages are being split
+                        if (!isPro) {
+                            for ((start, end) in pageRanges) {
+                                if (start > 2 || end > 2) {
+                                    promise.reject(
+                                        "PRO_REQUIRED",
+                                        "Free users can only split the first 2 pages. Upgrade to Pro for unlimited access."
+                                    )
+                                    return@launch
+                                }
                             }
-                            pdfPage.canvas.drawBitmap(bitmap, null, destRect, paint)
-                        } else {
-                            pdfPage.canvas.drawBitmap(bitmap, 0f, 0f, null)
                         }
 
-                        pdfDocument.finishPage(pdfPage)
+                        // Ensure output directory exists
+                        val outputDirFile = File(outputDir)
+                        if (!outputDirFile.exists()) {
+                            outputDirFile.mkdirs()
+                        }
 
-                        // Immediately recycle bitmap to free memory
-                        bitmap.recycle()
-                        pagesProcessed++
+                        sendProgressEvent(20, "Splitting PDF...")
 
-                        // Trigger GC periodically
-                        if (pagesProcessed % PAGE_BATCH_SIZE == 0) {
+                        val outputFiles = Arguments.createArray()
+                        val totalRanges = pageRanges.size
+                        var completedRanges = 0
+
+                        for ((start, end) in pageRanges) {
+                            val rangeStr = if (start == end) "$start" else "$start-$end"
+                            val outputFileName = "${baseName}_pages_$rangeStr.pdf"
+                            val outputFilePath = "$outputDir/$outputFileName"
+
+                            // Create new PDF for this range
+                            val pdfDocument = PdfDocument()
+                            var pagesProcessed = 0
+
+                            try {
+                                for (pageNum in start..end) {
+                                    pdfRenderer.openPage(pageNum - 1).use { page ->
+                                        // Calculate dimensions with memory limits
+                                        var width = page.width
+                                        var height = page.height
+                                        val originalWidth = width
+                                        val originalHeight = height
+
+                                        // Check if bitmap would be too large and reduce if necessary
+                                        val pixelCount = width.toLong() * height.toLong()
+                                        if (pixelCount > MAX_BITMAP_PIXELS) {
+                                            val reductionFactor = Math.sqrt(MAX_BITMAP_PIXELS.toDouble() / pixelCount.toDouble())
+                                            width = (width * reductionFactor).toInt()
+                                            height = (height * reductionFactor).toInt()
+                                            Log.d(TAG, "Page $pageNum: Reduced dimensions to ${width}x${height}")
+                                        }
+
+                                        // Use RGB_565 (2 bytes/pixel) instead of ARGB_8888 (4 bytes/pixel)
+                                        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
+                                        try {
+                                            bitmap.eraseColor(Color.WHITE)
+                                            page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+
+                                            // Create page in output document with original dimensions
+                                            val pageInfo = PdfDocument.PageInfo.Builder(originalWidth, originalHeight, pageNum).create()
+                                            val pdfPage = pdfDocument.startPage(pageInfo)
+
+                                            // Scale bitmap to original dimensions if it was reduced
+                                            if (width != originalWidth || height != originalHeight) {
+                                                val destRect = android.graphics.Rect(0, 0, originalWidth, originalHeight)
+                                                val paint = Paint().apply {
+                                                    isFilterBitmap = true
+                                                    isDither = true
+                                                }
+                                                pdfPage.canvas.drawBitmap(bitmap, null, destRect, paint)
+                                            } else {
+                                                pdfPage.canvas.drawBitmap(bitmap, 0f, 0f, null)
+                                            }
+
+                                            pdfDocument.finishPage(pdfPage)
+                                        } finally {
+                                            // Immediately recycle bitmap to free memory
+                                            bitmap.recycle()
+                                        }
+
+                                        pagesProcessed++
+
+                                        // Trigger GC periodically
+                                        if (pagesProcessed % PAGE_BATCH_SIZE == 0) {
+                                            System.gc()
+                                        }
+
+                                        // Update progress
+                                        val pageProgress = 20 + ((completedRanges * 70 / totalRanges) +
+                                                ((pageNum - start + 1) * 70 / (totalRanges * (end - start + 1))))
+                                        sendProgressEvent(pageProgress.coerceAtMost(90), "Processing pages $rangeStr...")
+                                    }
+                                }
+
+                                // Write output file
+                                FileOutputStream(outputFilePath).use { outputStream ->
+                                    pdfDocument.writeTo(outputStream)
+                                }
+                            } finally {
+                                pdfDocument.close()
+                            }
+
+                            // Force GC after each range
                             System.gc()
+
+                            // Add to results
+                            val outputFile = File(outputFilePath)
+                            val fileInfo = Arguments.createMap().apply {
+                                putString("path", outputFilePath)
+                                putString("fileName", outputFileName)
+                                putString("range", rangeStr)
+                                putInt("pageCount", end - start + 1)
+                                putDouble("fileSize", outputFile.length().toDouble())
+                            }
+                            outputFiles.pushMap(fileInfo)
+
+                            completedRanges++
                         }
 
-                        // Update progress
-                        val pageProgress = 20 + ((completedRanges * 70 / totalRanges) +
-                                ((pageNum - start + 1) * 70 / (totalRanges * (end - start + 1))))
-                        sendProgressEvent(pageProgress.coerceAtMost(90), "Processing pages $rangeStr...")
+                        sendProgressEvent(100, "Complete!")
+
+                        val response = Arguments.createMap().apply {
+                            putArray("outputFiles", outputFiles)
+                            putInt("totalFilesCreated", outputFiles.size())
+                            putInt("sourcePageCount", totalPages)
+                        }
+
+                        promise.resolve(response)
                     }
-
-                    // Write output file
-                    FileOutputStream(outputPath).use { outputStream ->
-                        pdfDocument.writeTo(outputStream)
-                    }
-                    pdfDocument.close()
-
-                    // Force GC after each range
-                    System.gc()
-
-                    // Add to results
-                    val outputFile = File(outputPath)
-                    val fileInfo = Arguments.createMap().apply {
-                        putString("path", outputPath)
-                        putString("fileName", outputFileName)
-                        putString("range", rangeStr)
-                        putInt("pageCount", end - start + 1)
-                        putDouble("fileSize", outputFile.length().toDouble())
-                    }
-                    outputFiles.pushMap(fileInfo)
-
-                    completedRanges++
                 }
 
-                pdfRenderer.close()
-                fileDescriptor.close()
-
-                sendProgressEvent(100, "Complete!")
-
-                val response = Arguments.createMap().apply {
-                    putArray("outputFiles", outputFiles)
-                    putInt("totalFilesCreated", outputFiles.size())
-                    putInt("sourcePageCount", totalPages)
-                }
-
-                promise.resolve(response)
-
+            } catch (e: SecurityException) {
+                promise.reject("PDF_CORRUPTED", "PDF file is corrupted or password-protected", e)
+            } catch (e: IllegalStateException) {
+                promise.reject("PDF_MALFORMED", "PDF file is malformed or cannot be read", e)
             } catch (e: Exception) {
                 promise.reject("SPLIT_ERROR", e.message ?: "Unknown error during PDF splitting", e)
+            } finally {
+                System.gc()
             }
         }
     }
@@ -252,87 +256,90 @@ class PdfSplitterModule(private val reactContext: ReactApplicationContext) :
                     return@launch
                 }
 
-                val fileDescriptor = ParcelFileDescriptor.open(inputFile, ParcelFileDescriptor.MODE_READ_ONLY)
-                val pdfRenderer = PdfRenderer(fileDescriptor)
+                // Use use() extension for automatic resource cleanup
+                ParcelFileDescriptor.open(inputFile, ParcelFileDescriptor.MODE_READ_ONLY).use { fileDescriptor ->
+                    PdfRenderer(fileDescriptor).use { pdfRenderer ->
+                        if (pageNumber < 1 || pageNumber > pdfRenderer.pageCount) {
+                            promise.reject("INVALID_PAGE", "Page number $pageNumber is out of range (1-${pdfRenderer.pageCount})")
+                            return@launch
+                        }
 
-                if (pageNumber < 1 || pageNumber > pdfRenderer.pageCount) {
-                    pdfRenderer.close()
-                    fileDescriptor.close()
-                    promise.reject("INVALID_PAGE", "Page number $pageNumber is out of range (1-${pdfRenderer.pageCount})")
-                    return@launch
-                }
+                        sendProgressEvent(30, "Extracting page $pageNumber...")
 
-                sendProgressEvent(30, "Extracting page $pageNumber...")
+                        pdfRenderer.openPage(pageNumber - 1).use { page ->
+                            // Calculate dimensions with memory limits
+                            var width = page.width
+                            var height = page.height
+                            val originalWidth = width
+                            val originalHeight = height
 
-                val pageIndex = pageNumber - 1
-                val page = pdfRenderer.openPage(pageIndex)
+                            val pixelCount = width.toLong() * height.toLong()
+                            if (pixelCount > MAX_BITMAP_PIXELS) {
+                                val reductionFactor = Math.sqrt(MAX_BITMAP_PIXELS.toDouble() / pixelCount.toDouble())
+                                width = (width * reductionFactor).toInt()
+                                height = (height * reductionFactor).toInt()
+                                Log.d(TAG, "Page $pageNumber: Reduced dimensions to ${width}x${height}")
+                            }
 
-                // Calculate dimensions with memory limits
-                var width = page.width
-                var height = page.height
-                val originalWidth = width
-                val originalHeight = height
+                            // Use RGB_565 for memory efficiency
+                            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
+                            val pdfDocument = PdfDocument()
 
-                val pixelCount = width.toLong() * height.toLong()
-                if (pixelCount > MAX_BITMAP_PIXELS) {
-                    val reductionFactor = Math.sqrt(MAX_BITMAP_PIXELS.toDouble() / pixelCount.toDouble())
-                    width = (width * reductionFactor).toInt()
-                    height = (height * reductionFactor).toInt()
-                    Log.d(TAG, "Page $pageNumber: Reduced dimensions to ${width}x${height}")
-                }
+                            try {
+                                bitmap.eraseColor(Color.WHITE)
+                                page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
 
-                // Use RGB_565 for memory efficiency
-                val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
-                bitmap.eraseColor(Color.WHITE)
-                page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                page.close()
+                                sendProgressEvent(60, "Creating PDF...")
 
-                sendProgressEvent(60, "Creating PDF...")
+                                val pageInfo = PdfDocument.PageInfo.Builder(originalWidth, originalHeight, 1).create()
+                                val pdfPage = pdfDocument.startPage(pageInfo)
 
-                val pdfDocument = PdfDocument()
-                val pageInfo = PdfDocument.PageInfo.Builder(originalWidth, originalHeight, 1).create()
-                val pdfPage = pdfDocument.startPage(pageInfo)
+                                // Scale bitmap to original dimensions if it was reduced
+                                if (width != originalWidth || height != originalHeight) {
+                                    val destRect = android.graphics.Rect(0, 0, originalWidth, originalHeight)
+                                    val paint = Paint().apply {
+                                        isFilterBitmap = true
+                                        isDither = true
+                                    }
+                                    pdfPage.canvas.drawBitmap(bitmap, null, destRect, paint)
+                                } else {
+                                    pdfPage.canvas.drawBitmap(bitmap, 0f, 0f, null)
+                                }
 
-                // Scale bitmap to original dimensions if it was reduced
-                if (width != originalWidth || height != originalHeight) {
-                    val destRect = android.graphics.Rect(0, 0, originalWidth, originalHeight)
-                    val paint = Paint().apply {
-                        isFilterBitmap = true
-                        isDither = true
+                                pdfDocument.finishPage(pdfPage)
+
+                                sendProgressEvent(80, "Saving...")
+
+                                val outputFile = File(outputPath)
+                                FileOutputStream(outputFile).use { outputStream ->
+                                    pdfDocument.writeTo(outputStream)
+                                }
+
+                                sendProgressEvent(100, "Complete!")
+
+                                val response = Arguments.createMap().apply {
+                                    putString("outputPath", outputPath)
+                                    putInt("pageNumber", pageNumber)
+                                    putDouble("fileSize", outputFile.length().toDouble())
+                                }
+
+                                promise.resolve(response)
+                            } finally {
+                                bitmap.recycle()
+                                pdfDocument.close()
+                            }
+                        }
                     }
-                    pdfPage.canvas.drawBitmap(bitmap, null, destRect, paint)
-                } else {
-                    pdfPage.canvas.drawBitmap(bitmap, 0f, 0f, null)
                 }
 
-                pdfDocument.finishPage(pdfPage)
-
-                // Immediately recycle bitmap
-                bitmap.recycle()
-
-                sendProgressEvent(80, "Saving...")
-
-                val outputFile = File(outputPath)
-                FileOutputStream(outputFile).use { outputStream ->
-                    pdfDocument.writeTo(outputStream)
-                }
-                pdfDocument.close()
-
-                pdfRenderer.close()
-                fileDescriptor.close()
-
-                sendProgressEvent(100, "Complete!")
-
-                val response = Arguments.createMap().apply {
-                    putString("outputPath", outputPath)
-                    putInt("pageNumber", pageNumber)
-                    putDouble("fileSize", outputFile.length().toDouble())
-                }
-
-                promise.resolve(response)
-
+            } catch (e: SecurityException) {
+                promise.reject("PDF_CORRUPTED", "PDF file is corrupted or password-protected", e)
+            } catch (e: IllegalStateException) {
+                promise.reject("PDF_MALFORMED", "PDF file is malformed or cannot be read", e)
             } catch (e: Exception) {
                 promise.reject("EXTRACT_ERROR", e.message ?: "Unknown error during page extraction", e)
+            } finally {
+                System.gc()
             }
         }
     }
@@ -350,14 +357,15 @@ class PdfSplitterModule(private val reactContext: ReactApplicationContext) :
                     return@launch
                 }
 
-                val fileDescriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
-                val pdfRenderer = PdfRenderer(fileDescriptor)
-                val pageCount = pdfRenderer.pageCount
-
-                pdfRenderer.close()
-                fileDescriptor.close()
+                val pageCount = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { fileDescriptor ->
+                    PdfRenderer(fileDescriptor).use { pdfRenderer ->
+                        pdfRenderer.pageCount
+                    }
+                }
 
                 promise.resolve(pageCount)
+            } catch (e: SecurityException) {
+                promise.reject("PDF_CORRUPTED", "PDF file is corrupted or invalid", e)
             } catch (e: Exception) {
                 promise.reject("PDF_ERROR", e.message ?: "Failed to read PDF", e)
             }

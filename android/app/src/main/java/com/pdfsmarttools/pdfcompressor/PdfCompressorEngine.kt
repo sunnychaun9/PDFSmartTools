@@ -49,91 +49,110 @@ class PdfCompressorEngine {
         // Ensure output directory exists
         outputFile.parentFile?.mkdirs()
 
-        // Open the PDF for rendering
-        val fileDescriptor = ParcelFileDescriptor.open(inputFile, ParcelFileDescriptor.MODE_READ_ONLY)
-        val pdfRenderer = PdfRenderer(fileDescriptor)
-        val pageCount = pdfRenderer.pageCount
-
-        if (pageCount == 0) {
-            pdfRenderer.close()
-            fileDescriptor.close()
-            throw IllegalArgumentException("PDF has no pages")
-        }
+        // Use atomic write: write to temp file first, then rename
+        val tempFile = File(outputFile.parentFile, ".${outputFile.name}.tmp")
 
         // Create new PDF document
         val pdfDocument = PdfDocument()
+        var pageCount = 0
 
         try {
-            for (i in 0 until pageCount) {
-                val page = pdfRenderer.openPage(i)
+            // Use use() extension for automatic resource cleanup
+            ParcelFileDescriptor.open(inputFile, ParcelFileDescriptor.MODE_READ_ONLY).use { fileDescriptor ->
+                PdfRenderer(fileDescriptor).use { pdfRenderer ->
+                    pageCount = pdfRenderer.pageCount
 
-                // Calculate dimensions at target DPI with memory limits
-                val scale = level.dpi / 72f
-                var width = (page.width * scale).toInt()
-                var height = (page.height * scale).toInt()
+                    if (pageCount == 0) {
+                        throw IllegalArgumentException("PDF has no pages")
+                    }
 
-                // Check if bitmap would be too large and reduce if necessary
-                val pixelCount = width.toLong() * height.toLong()
-                if (pixelCount > MAX_BITMAP_PIXELS) {
-                    val reductionFactor = Math.sqrt(MAX_BITMAP_PIXELS.toDouble() / pixelCount.toDouble())
-                    width = (width * reductionFactor).toInt()
-                    height = (height * reductionFactor).toInt()
-                    Log.d(TAG, "Page $i: Reduced dimensions to ${width}x${height} to fit memory limits")
-                }
+                    for (i in 0 until pageCount) {
+                        pdfRenderer.openPage(i).use { page ->
+                            // Calculate dimensions at target DPI with memory limits
+                            val scale = level.dpi / 72f
+                            var width = (page.width * scale).toInt()
+                            var height = (page.height * scale).toInt()
+                            val originalWidth = page.width
+                            val originalHeight = page.height
 
-                // Use RGB_565 (2 bytes/pixel) instead of ARGB_8888 (4 bytes/pixel)
-                // This halves memory usage and is fine for JPEG compression
-                val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
-                bitmap.eraseColor(Color.WHITE)
+                            // Check if bitmap would be too large and reduce if necessary
+                            val pixelCount = width.toLong() * height.toLong()
+                            if (pixelCount > MAX_BITMAP_PIXELS) {
+                                val reductionFactor = Math.sqrt(MAX_BITMAP_PIXELS.toDouble() / pixelCount.toDouble())
+                                width = (width * reductionFactor).toInt()
+                                height = (height * reductionFactor).toInt()
+                                Log.d(TAG, "Page $i: Reduced dimensions to ${width}x${height} to fit memory limits")
+                            }
 
-                page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
-                page.close()
+                            // Use RGB_565 (2 bytes/pixel) instead of ARGB_8888 (4 bytes/pixel)
+                            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
+                            try {
+                                bitmap.eraseColor(Color.WHITE)
+                                page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
 
-                // Draw watermark for free users
-                if (!isPro) {
-                    drawWatermark(bitmap)
-                }
+                                // Draw watermark for free users
+                                if (!isPro) {
+                                    drawWatermark(bitmap)
+                                }
 
-                // Create PDF page with original dimensions (points)
-                val pageInfo = PdfDocument.PageInfo.Builder(page.width, page.height, i + 1).create()
-                val pdfPage = pdfDocument.startPage(pageInfo)
+                                // Create PDF page with original dimensions (points)
+                                val pageInfo = PdfDocument.PageInfo.Builder(originalWidth, originalHeight, i + 1).create()
+                                val pdfPage = pdfDocument.startPage(pageInfo)
 
-                // Compress and draw directly to PDF canvas without intermediate bitmap
-                val canvas = pdfPage.canvas
-                val destRect = android.graphics.Rect(0, 0, page.width, page.height)
+                                // Draw to PDF canvas
+                                val canvas = pdfPage.canvas
+                                val destRect = android.graphics.Rect(0, 0, originalWidth, originalHeight)
 
-                // Use paint with quality settings for better compression
-                val paint = Paint().apply {
-                    isFilterBitmap = true
-                    isDither = true
-                }
-                canvas.drawBitmap(bitmap, null, destRect, paint)
+                                val paint = Paint().apply {
+                                    isFilterBitmap = true
+                                    isDither = true
+                                }
+                                canvas.drawBitmap(bitmap, null, destRect, paint)
 
-                pdfDocument.finishPage(pdfPage)
+                                pdfDocument.finishPage(pdfPage)
+                            } finally {
+                                bitmap.recycle()
+                            }
 
-                // Immediately recycle bitmap to free memory
-                bitmap.recycle()
+                            // Report progress
+                            val progress = ((i + 1) * 100) / pageCount
+                            onProgress(progress, i + 1, pageCount)
 
-                // Report progress
-                val progress = ((i + 1) * 100) / pageCount
-                onProgress(progress, i + 1, pageCount)
-
-                // Trigger GC periodically to prevent memory buildup
-                if ((i + 1) % PAGE_BATCH_SIZE == 0) {
-                    System.gc()
+                            // Trigger GC periodically to prevent memory buildup
+                            if ((i + 1) % PAGE_BATCH_SIZE == 0) {
+                                System.gc()
+                            }
+                        }
+                    }
                 }
             }
 
-            // Write output PDF
-            FileOutputStream(outputFile).use { output ->
+            // Atomic write: write to temp file first
+            FileOutputStream(tempFile).use { output ->
                 pdfDocument.writeTo(output)
             }
 
+            // Atomic rename: only rename if write succeeded
+            if (!tempFile.renameTo(outputFile)) {
+                tempFile.copyTo(outputFile, overwrite = true)
+                tempFile.delete()
+            }
+
+        } catch (e: SecurityException) {
+            // PDF is corrupted or encrypted
+            pdfDocument.close()
+            tempFile.delete()
+            outputFile.delete()
+            throw IllegalArgumentException("PDF file is corrupted or password-protected", e)
+        } catch (e: IllegalStateException) {
+            // PdfRenderer may throw this for malformed PDFs
+            pdfDocument.close()
+            tempFile.delete()
+            outputFile.delete()
+            throw IllegalArgumentException("PDF file is malformed or cannot be read", e)
         } finally {
             pdfDocument.close()
-            pdfRenderer.close()
-            fileDescriptor.close()
-            // Final cleanup
+            if (tempFile.exists()) tempFile.delete()
             System.gc()
         }
 

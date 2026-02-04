@@ -43,6 +43,9 @@ class PdfMergerEngine {
         val outputFile = File(outputPath)
         outputFile.parentFile?.mkdirs()
 
+        // Use atomic write: write to temp file first, then rename
+        val tempFile = File(outputFile.parentFile, ".${outputFile.name}.tmp")
+
         val pdfDocument = PdfDocument()
         var totalPageCount = 0
         val fileCount = inputPaths.size
@@ -54,77 +57,75 @@ class PdfMergerEngine {
                     throw IllegalArgumentException("Input file not found: $inputPath")
                 }
 
-                val fileDescriptor = ParcelFileDescriptor.open(inputFile, ParcelFileDescriptor.MODE_READ_ONLY)
-                val pdfRenderer = PdfRenderer(fileDescriptor)
-                val pageCount = pdfRenderer.pageCount
+                // Use use() extension for automatic resource cleanup (try-with-resources equivalent)
+                ParcelFileDescriptor.open(inputFile, ParcelFileDescriptor.MODE_READ_ONLY).use { fileDescriptor ->
+                    PdfRenderer(fileDescriptor).use { pdfRenderer ->
+                        val pageCount = pdfRenderer.pageCount
 
-                if (pageCount == 0) {
-                    pdfRenderer.close()
-                    fileDescriptor.close()
-                    continue
-                }
-
-                for (pageIndex in 0 until pageCount) {
-                    val page = pdfRenderer.openPage(pageIndex)
-
-                    // Calculate dimensions with memory limits
-                    var width = page.width
-                    var height = page.height
-
-                    // Check if bitmap would be too large and reduce if necessary
-                    val pixelCount = width.toLong() * height.toLong()
-                    if (pixelCount > MAX_BITMAP_PIXELS) {
-                        val reductionFactor = Math.sqrt(MAX_BITMAP_PIXELS.toDouble() / pixelCount.toDouble())
-                        width = (width * reductionFactor).toInt()
-                        height = (height * reductionFactor).toInt()
-                        Log.d(TAG, "File $fileIndex, Page $pageIndex: Reduced dimensions to ${width}x${height}")
-                    }
-
-                    // Use RGB_565 (2 bytes/pixel) instead of ARGB_8888 (4 bytes/pixel)
-                    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
-                    bitmap.eraseColor(Color.WHITE)
-                    page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
-
-                    val originalWidth = page.width
-                    val originalHeight = page.height
-                    page.close()
-
-                    // Draw watermark for free users
-                    if (!isPro) {
-                        drawWatermark(bitmap)
-                    }
-
-                    // Create PDF page with original dimensions
-                    totalPageCount++
-                    val pageInfo = PdfDocument.PageInfo.Builder(originalWidth, originalHeight, totalPageCount).create()
-                    val pdfPage = pdfDocument.startPage(pageInfo)
-
-                    val canvas = pdfPage.canvas
-                    // Scale bitmap to original page dimensions if reduced
-                    if (width != originalWidth || height != originalHeight) {
-                        val destRect = android.graphics.Rect(0, 0, originalWidth, originalHeight)
-                        val paint = Paint().apply {
-                            isFilterBitmap = true
-                            isDither = true
+                        if (pageCount == 0) {
+                            return@use // Skip empty PDFs
                         }
-                        canvas.drawBitmap(bitmap, null, destRect, paint)
-                    } else {
-                        canvas.drawBitmap(bitmap, 0f, 0f, null)
-                    }
 
-                    pdfDocument.finishPage(pdfPage)
+                        for (pageIndex in 0 until pageCount) {
+                            pdfRenderer.openPage(pageIndex).use { page ->
+                                // Calculate dimensions with memory limits
+                                var width = page.width
+                                var height = page.height
+                                val originalWidth = page.width
+                                val originalHeight = page.height
 
-                    // Immediately recycle bitmap to free memory
-                    bitmap.recycle()
+                                // Check if bitmap would be too large and reduce if necessary
+                                val pixelCount = width.toLong() * height.toLong()
+                                if (pixelCount > MAX_BITMAP_PIXELS) {
+                                    val reductionFactor = Math.sqrt(MAX_BITMAP_PIXELS.toDouble() / pixelCount.toDouble())
+                                    width = (width * reductionFactor).toInt()
+                                    height = (height * reductionFactor).toInt()
+                                    Log.d(TAG, "File $fileIndex, Page $pageIndex: Reduced dimensions to ${width}x${height}")
+                                }
 
-                    // Trigger GC periodically to prevent memory buildup
-                    if (totalPageCount % PAGE_BATCH_SIZE == 0) {
-                        System.gc()
+                                // Use RGB_565 (2 bytes/pixel) instead of ARGB_8888 (4 bytes/pixel)
+                                val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
+                                try {
+                                    bitmap.eraseColor(Color.WHITE)
+                                    page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
+
+                                    // Draw watermark for free users
+                                    if (!isPro) {
+                                        drawWatermark(bitmap)
+                                    }
+
+                                    // Create PDF page with original dimensions
+                                    totalPageCount++
+                                    val pageInfo = PdfDocument.PageInfo.Builder(originalWidth, originalHeight, totalPageCount).create()
+                                    val pdfPage = pdfDocument.startPage(pageInfo)
+
+                                    val canvas = pdfPage.canvas
+                                    // Scale bitmap to original page dimensions if reduced
+                                    if (width != originalWidth || height != originalHeight) {
+                                        val destRect = android.graphics.Rect(0, 0, originalWidth, originalHeight)
+                                        val paint = Paint().apply {
+                                            isFilterBitmap = true
+                                            isDither = true
+                                        }
+                                        canvas.drawBitmap(bitmap, null, destRect, paint)
+                                    } else {
+                                        canvas.drawBitmap(bitmap, 0f, 0f, null)
+                                    }
+
+                                    pdfDocument.finishPage(pdfPage)
+                                } finally {
+                                    // Immediately recycle bitmap to free memory
+                                    bitmap.recycle()
+                                }
+
+                                // Trigger GC periodically to prevent memory buildup
+                                if (totalPageCount % PAGE_BATCH_SIZE == 0) {
+                                    System.gc()
+                                }
+                            }
+                        }
                     }
                 }
-
-                pdfRenderer.close()
-                fileDescriptor.close()
 
                 // Force GC after each file to free resources
                 System.gc()
@@ -138,20 +139,37 @@ class PdfMergerEngine {
                 throw IllegalArgumentException("No pages found in the provided PDF files")
             }
 
-            // Write output PDF
-            FileOutputStream(outputFile).use { output ->
+            // Atomic write: write to temp file first
+            FileOutputStream(tempFile).use { output ->
                 pdfDocument.writeTo(output)
             }
 
-        } catch (e: Exception) {
-            // Clean up partial file on failure
-            if (outputFile.exists()) {
-                outputFile.delete()
+            // Atomic rename: only rename if write succeeded
+            if (!tempFile.renameTo(outputFile)) {
+                // Fallback: copy and delete if rename fails (cross-filesystem)
+                tempFile.copyTo(outputFile, overwrite = true)
+                tempFile.delete()
             }
+
+        } catch (e: SecurityException) {
+            // PDF is corrupted or encrypted - clean up and rethrow with clear message
+            tempFile.delete()
+            outputFile.delete()
+            throw IllegalArgumentException("One or more PDF files are corrupted or password-protected", e)
+        } catch (e: IllegalStateException) {
+            // PdfRenderer may throw this for malformed PDFs
+            tempFile.delete()
+            outputFile.delete()
+            throw IllegalArgumentException("One or more PDF files are malformed or cannot be read", e)
+        } catch (e: Exception) {
+            // Clean up temp and partial files on failure
+            tempFile.delete()
+            outputFile.delete()
             throw e
         } finally {
             pdfDocument.close()
-            // Final cleanup
+            // Clean up temp file if it still exists
+            if (tempFile.exists()) tempFile.delete()
             System.gc()
         }
 
@@ -168,13 +186,13 @@ class PdfMergerEngine {
             val inputFile = resolveInputFile(context, inputPath)
             if (!inputFile.exists()) return 0
 
-            val fileDescriptor = ParcelFileDescriptor.open(inputFile, ParcelFileDescriptor.MODE_READ_ONLY)
-            val pdfRenderer = PdfRenderer(fileDescriptor)
-            val pageCount = pdfRenderer.pageCount
-            pdfRenderer.close()
-            fileDescriptor.close()
-            pageCount
+            ParcelFileDescriptor.open(inputFile, ParcelFileDescriptor.MODE_READ_ONLY).use { fileDescriptor ->
+                PdfRenderer(fileDescriptor).use { pdfRenderer ->
+                    pdfRenderer.pageCount
+                }
+            }
         } catch (e: Exception) {
+            Log.w(TAG, "Failed to get page count for $inputPath", e)
             0
         }
     }

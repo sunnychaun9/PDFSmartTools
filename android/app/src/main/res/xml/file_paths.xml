@@ -12,9 +12,8 @@
     <!-- External cache directory -->
     <external-cache-path name="external_cache" path="." />
 
-    <!-- Downloads directory -->
-    <external-path name="external" path="." />
+    <!-- Downloads directory - limited to PDFSmartTools subfolder for security -->
+    <external-path name="downloads" path="Download/PDFSmartTools" />
 
-    <!-- Root of external storage (for legacy support) -->
-    <root-path name="root" path="." />
+    <!-- REMOVED: root-path was exposing entire filesystem - SECURITY VULNERABILITY -->
 </paths>

@@ -15,7 +15,6 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 import { SafeScreen, Header, Spacer } from '../../components/layout';
-import CameraPreview from '../../components/camera/CameraPreview';
 import { Button, Text, Icon, AppModal } from '../../components/ui';
 import { ProgressBar } from '../../components/feedback';
 import { colors, spacing, borderRadius, shadows } from '../../theme';
@@ -72,7 +71,6 @@ export default function ScanDocumentScreen() {
   const [isProcessingEdit, setIsProcessingEdit] = useState(false);
   const [showSourcePicker, setShowSourcePicker] = useState(false);
   const [generatedPdfPath, setGeneratedPdfPath] = useState<string | null>(null);
-  const [showCameraView, setShowCameraView] = useState(false);
 
   const [permissionModal, setPermissionModal] = useState<{
     visible: boolean;
@@ -211,6 +209,7 @@ export default function ScanDocumentScreen() {
           message: 'Please grant camera permission to scan documents.',
           showSettings: true,
         });
+        setIsCapturing(false);
         return;
       }
 
@@ -221,14 +220,28 @@ export default function ScanDocumentScreen() {
           message: 'Cannot use camera without permission.',
           showSettings: false,
         });
+        setIsCapturing(false);
         return;
       }
 
-      // Show native live camera preview for capture
-      setShowCameraView(true);
-      // Actual capture handled by CameraPreview component which will
-      // call back into `addPageFromUri` via handleCameraCaptured
-      return;
+      // Use react-native-image-picker's camera instead of custom CameraPreview
+      // This avoids compatibility issues with react-native-camera on newer RN versions
+      const result = await launchCamera({
+        mediaType: 'photo',
+        quality: 0.9,
+        saveToPhotos: false,
+        cameraType: 'back',
+      });
+
+      if (result.didCancel || !result.assets || result.assets.length === 0) {
+        setIsCapturing(false);
+        return;
+      }
+
+      const asset = result.assets[0];
+      if (asset.uri) {
+        await addPageFromUri(asset.uri);
+      }
     } catch (error) {
       setErrorModal({
         visible: true,
@@ -238,21 +251,6 @@ export default function ScanDocumentScreen() {
       setIsCapturing(false);
     }
   }, [isCapturing, hideSourcePickerModal, addPageFromUri]);
-
-  const handleCameraCaptured = useCallback(
-    async (uri: string) => {
-      setShowCameraView(false);
-      setIsCapturing(true);
-      try {
-        await addPageFromUri(uri);
-      } catch (error) {
-        setErrorModal({ visible: true, message: String((error as Error).message || error) });
-      } finally {
-        setIsCapturing(false);
-      }
-    },
-    [addPageFromUri]
-  );
 
   const handleGallerySelect = useCallback(async () => {
     hideSourcePickerModal();
@@ -751,11 +749,6 @@ export default function ScanDocumentScreen() {
 
   return (
     <SafeScreen>
-      {showCameraView && (
-        <Modal visible animationType="slide" transparent={false}>
-          <CameraPreview onCapture={handleCameraCaptured} onCancel={() => setShowCameraView(false)} />
-        </Modal>
-      )}
       <Header
         title="Scan Document"
         rightAction={

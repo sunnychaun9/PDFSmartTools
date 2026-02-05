@@ -11,9 +11,10 @@ import {
 } from 'react-native';
 import { SafeScreen, Header, Spacer } from '../../components/layout';
 import { Button, Text, Icon, AppModal } from '../../components/ui';
-import { ProgressBar } from '../../components/feedback';
+import { ProgressModal } from '../../components/feedback';
 import { useProGate, UpgradePromptModal } from '../../components/subscription';
 import { colors, spacing, borderRadius, shadows } from '../../theme';
+import { EnhancedProgress, ProgressTracker, createInitialProgress } from '../../utils/progressUtils';
 import {
   protectPdf,
   validatePdf,
@@ -146,33 +147,6 @@ function PasswordStrength({ password }: { password: string }) {
   );
 }
 
-// Progress component
-function ProtectionProgress({
-  progress,
-  status,
-}: {
-  progress: number;
-  status: string;
-}) {
-  const { theme } = useTheme();
-
-  return (
-    <View style={[styles.progressCard, { backgroundColor: theme.surface }, shadows.card]}>
-      <View style={styles.progressHeader}>
-        <View style={[styles.progressSpinner, { backgroundColor: `${colors.primary}15` }]}>
-          <Text style={{ fontSize: 24 }}>🔐</Text>
-        </View>
-        <View style={styles.progressInfo}>
-          <Text variant="body" style={{ color: theme.textPrimary }}>Protecting PDF</Text>
-          <Text variant="caption" style={{ color: theme.textTertiary }}>{status}</Text>
-        </View>
-        <Text variant="h3" customColor={colors.primary}>{progress}%</Text>
-      </View>
-      <Spacer size="md" />
-      <ProgressBar progress={progress} height={10} />
-    </View>
-  );
-}
 
 // Result card component
 function ResultCard({
@@ -268,8 +242,8 @@ export default function ProtectPdfScreen() {
 
   // Processing state
   const [isProtecting, setIsProtecting] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [progressStatus, setProgressStatus] = useState('');
+  const [enhancedProgress, setEnhancedProgress] = useState<EnhancedProgress | null>(null);
+  const progressTrackerRef = useRef<ProgressTracker | null>(null);
 
   // Result state
   const [protectionResult, setProtectionResult] = useState<ProtectionResult | null>(null);
@@ -400,16 +374,25 @@ export default function ProtectPdfScreen() {
     }
 
     setIsProtecting(true);
-    setProgress(0);
-    setProgressStatus('Initializing...');
+    // Use filePageCount for page-by-page progress estimation
+    const totalPages = filePageCount > 0 ? filePageCount : 1;
+    progressTrackerRef.current = new ProgressTracker(totalPages);
+    setEnhancedProgress(createInitialProgress(totalPages, 'Initializing encryption...'));
     setProtectionResult(null);
 
     try {
       const result = await protectPdf(selectedFile.localPath, {
         password,
         onProgress: (progressInfo) => {
-          setProgress(progressInfo.progress);
-          setProgressStatus(progressInfo.status);
+          if (progressTrackerRef.current) {
+            // Estimate current page from progress percentage
+            const currentPage = Math.max(1, Math.ceil((progressInfo.progress / 100) * totalPages));
+            const progress = progressTrackerRef.current.update(
+              currentPage,
+              progressInfo.status || `Encrypting page ${currentPage} of ${totalPages}...`
+            );
+            setEnhancedProgress(progress);
+          }
         },
         isPro,
       });
@@ -482,8 +465,7 @@ export default function ProtectPdfScreen() {
     setConfirmPassword('');
     setPasswordError(undefined);
     setConfirmError(undefined);
-    setProgress(0);
-    setProgressStatus('');
+    setEnhancedProgress(null);
   }, [selectedFile]);
 
   const isFormValid = password.length >= 6 && confirmPassword === password && !passwordError && !confirmError;
@@ -680,13 +662,6 @@ export default function ProtectPdfScreen() {
             </View>
           </View>
 
-          {isProtecting && (
-            <>
-              <Spacer size="lg" />
-              <ProtectionProgress progress={progress} status={progressStatus} />
-            </>
-          )}
-
           <Spacer size="xl" />
         </ScrollView>
 
@@ -737,6 +712,15 @@ export default function ProtectPdfScreen() {
             onPress: () => setErrorModal((prev) => ({ ...prev, visible: false })),
           },
         ]}
+      />
+
+      <ProgressModal
+        visible={isProtecting}
+        title="Protecting PDF"
+        progress={enhancedProgress}
+        color={colors.success}
+        icon="🔐"
+        cancelable={false}
       />
     </SafeScreen>
   );
@@ -848,25 +832,6 @@ const styles = StyleSheet.create({
   },
   infoContent: {
     marginLeft: spacing.sm,
-    flex: 1,
-  },
-  progressCard: {
-    borderRadius: borderRadius.xl,
-    padding: spacing.lg,
-  },
-  progressHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  progressSpinner: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.md,
-  },
-  progressInfo: {
     flex: 1,
   },
   resultCardInner: {

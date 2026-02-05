@@ -13,9 +13,10 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import Pdf from 'react-native-pdf';
 import { SafeScreen, Header, Spacer } from '../../components/layout';
 import { Button, Text, Icon, AppModal } from '../../components/ui';
-import { ProgressBar } from '../../components/feedback';
+import { ProgressModal } from '../../components/feedback';
 import { useProGate, UpgradePromptModal } from '../../components/subscription';
 import { colors, spacing, borderRadius, shadows } from '../../theme';
+import { EnhancedProgress, ProgressTracker, createInitialProgress } from '../../utils/progressUtils';
 import { useTheme, useRating } from '../../context';
 import { RootStackParamList } from '../../navigation/types';
 import { pickPdfFile, PickedFile, cleanupPickedFile } from '../../services/filePicker';
@@ -61,8 +62,8 @@ export default function SignPdfScreen() {
   });
   const [signatureSize, setSignatureSize] = useState(DEFAULT_SIGNATURE_SIZE);
   const [isSigning, setIsSigning] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [progressText, setProgressText] = useState('');
+  const [enhancedProgress, setEnhancedProgress] = useState<EnhancedProgress | null>(null);
+  const progressTrackerRef = useRef<ProgressTracker | null>(null);
   const [signingResult, setSigningResult] = useState<SigningResult | null>(null);
   const [remainingUses, setRemainingUses] = useState<number>(Infinity);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
@@ -186,8 +187,9 @@ export default function SignPdfScreen() {
     }
 
     setIsSigning(true);
-    setProgress(0);
-    setProgressText('Initializing...');
+    // Signing usually processes the target page and generates output
+    progressTrackerRef.current = new ProgressTracker(pageCount);
+    setEnhancedProgress(createInitialProgress(pageCount, 'Initializing...'));
 
     try {
       // Calculate actual position on PDF page
@@ -207,8 +209,14 @@ export default function SignPdfScreen() {
         },
         addWatermark: !isPro, // Add watermark for free users
         onProgress: (progressInfo) => {
-          setProgress(progressInfo.progress);
-          setProgressText(progressInfo.status);
+          if (progressTrackerRef.current) {
+            const currentPageNum = Math.max(1, Math.ceil((progressInfo.progress / 100) * pageCount));
+            const progress = progressTrackerRef.current.update(
+              currentPageNum,
+              progressInfo.status || `Processing page ${currentPageNum} of ${pageCount}...`
+            );
+            setEnhancedProgress(progress);
+          }
         },
       });
 
@@ -273,8 +281,7 @@ export default function SignPdfScreen() {
     }
     setSelectedFile(null);
     setSigningResult(null);
-    setProgress(0);
-    setProgressText('');
+    setEnhancedProgress(null);
     setCurrentPage(0);
   }, [selectedFile]);
 
@@ -683,32 +690,6 @@ export default function SignPdfScreen() {
           </Text>
         </View>
 
-        {isSigning && (
-          <>
-            <Spacer size="lg" />
-            <View style={[styles.progressCard, { backgroundColor: theme.surface }, shadows.card]}>
-              <View style={styles.progressHeader}>
-                <View style={[styles.progressSpinner, { backgroundColor: `${colors.signPdf}15` }]}>
-                  <Text style={{ fontSize: 24 }}>✍️</Text>
-                </View>
-                <View style={styles.progressInfo}>
-                  <Text variant="body" style={{ color: theme.textPrimary }}>
-                    Signing PDF
-                  </Text>
-                  <Text variant="caption" style={{ color: theme.textTertiary }}>
-                    {progressText}
-                  </Text>
-                </View>
-                <Text variant="h3" customColor={colors.signPdf}>
-                  {progress}%
-                </Text>
-              </View>
-              <Spacer size="md" />
-              <ProgressBar progress={progress} height={10} progressColor={colors.signPdf} />
-            </View>
-          </>
-        )}
-
         <Spacer size="xl" />
       </ScrollView>
 
@@ -758,6 +739,15 @@ export default function SignPdfScreen() {
             onPress: () => setErrorModal((prev) => ({ ...prev, visible: false })),
           },
         ]}
+      />
+
+      <ProgressModal
+        visible={isSigning}
+        title="Signing PDF"
+        progress={enhancedProgress}
+        color={colors.signPdf}
+        icon="✍️"
+        cancelable={false}
       />
     </SafeScreen>
   );
@@ -875,25 +865,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     padding: spacing.md,
     borderRadius: borderRadius.lg,
-  },
-  progressCard: {
-    borderRadius: borderRadius.xl,
-    padding: spacing.lg,
-  },
-  progressHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  progressSpinner: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.md,
-  },
-  progressInfo: {
-    flex: 1,
   },
   resultCard: {
     padding: spacing.xl,

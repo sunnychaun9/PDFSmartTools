@@ -7,9 +7,10 @@ import {
 } from 'react-native';
 import { SafeScreen, Header, Spacer } from '../../components/layout';
 import { Button, Text, Icon, AppModal } from '../../components/ui';
-import { ProgressBar } from '../../components/feedback';
+import { ProgressModal } from '../../components/feedback';
 import { useProGate, UpgradePromptModal } from '../../components/subscription';
 import { colors, spacing, borderRadius, shadows } from '../../theme';
+import { EnhancedProgress, ProgressTracker, createInitialProgress } from '../../utils/progressUtils';
 import {
   processToSearchablePdf,
   PdfOcrResult,
@@ -27,44 +28,6 @@ import { sharePdfFile } from '../../services/shareService';
 import { canUse, consume, getRemaining, FEATURES } from '../../services/usageLimitService';
 import RNFS from 'react-native-fs';
 
-function OcrProgress({
-  progress,
-  currentPage,
-  totalPages,
-  status,
-}: {
-  progress: number;
-  currentPage: number;
-  totalPages: number;
-  status: string;
-}) {
-  const { theme } = useTheme();
-
-  return (
-    <View style={[styles.progressCard, { backgroundColor: theme.surface }, shadows.card]}>
-      <View style={styles.progressHeader}>
-        <View style={[styles.progressSpinner, { backgroundColor: `${colors.info}15` }]}>
-          <Text style={{ fontSize: 24 }}>🔍</Text>
-        </View>
-        <View style={styles.progressInfo}>
-          <Text variant="body" style={{ color: theme.textPrimary }}>
-            Creating Searchable PDF
-          </Text>
-          <Text variant="caption" style={{ color: theme.textTertiary }}>
-            {totalPages > 0 ? `Page ${currentPage} of ${totalPages}` : status}
-          </Text>
-        </View>
-        <Text variant="h3" customColor={colors.info}>{progress}%</Text>
-      </View>
-      <Spacer size="md" />
-      <ProgressBar progress={progress} height={10} progressColor={colors.info} />
-      <Spacer size="sm" />
-      <Text variant="caption" align="center" style={{ color: theme.textTertiary }}>
-        {status}
-      </Text>
-    </View>
-  );
-}
 
 function ResultCard({
   result,
@@ -186,10 +149,8 @@ export default function ScanToSearchablePdfScreen() {
 
   const [selectedFile, setSelectedFile] = useState<PickedFile | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [currentPage, setCurrentPage] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
-  const [progressStatus, setProgressStatus] = useState('');
+  const [enhancedProgress, setEnhancedProgress] = useState<EnhancedProgress | null>(null);
+  const progressTrackerRef = useRef<ProgressTracker | null>(null);
   const [ocrResult, setOcrResult] = useState<PdfOcrResult | null>(null);
   const [remainingUses, setRemainingUses] = useState<number>(Infinity);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
@@ -245,20 +206,34 @@ export default function ScanToSearchablePdfScreen() {
     }
 
     setIsProcessing(true);
-    setProgress(0);
-    setCurrentPage(0);
-    setTotalPages(0);
-    setProgressStatus('Initializing...');
+    setEnhancedProgress(createInitialProgress(1, 'Initializing OCR...'));
     setOcrResult(null);
 
     try {
       const result = await processToSearchablePdf(selectedFile.localPath, {
         isPro,
         onProgress: (progressInfo) => {
-          setProgress(progressInfo.progress);
-          setCurrentPage(progressInfo.currentPage);
-          setTotalPages(progressInfo.totalPages);
-          setProgressStatus(progressInfo.status);
+          // Initialize tracker with total pages once we know it
+          if (progressInfo.totalPages > 0) {
+            if (!progressTrackerRef.current || progressTrackerRef.current.getCurrent('').totalItems !== progressInfo.totalPages) {
+              progressTrackerRef.current = new ProgressTracker(progressInfo.totalPages);
+            }
+            const progress = progressTrackerRef.current.update(
+              progressInfo.currentPage,
+              progressInfo.status || `Processing page ${progressInfo.currentPage} of ${progressInfo.totalPages}...`
+            );
+            setEnhancedProgress(progress);
+          } else {
+            setEnhancedProgress({
+              progress: progressInfo.progress,
+              currentItem: progressInfo.currentPage,
+              totalItems: progressInfo.totalPages,
+              status: progressInfo.status,
+              elapsedMs: 0,
+              estimatedRemainingMs: -1,
+              estimatedTotalMs: -1,
+            });
+          }
         },
       });
 
@@ -347,10 +322,8 @@ export default function ScanToSearchablePdfScreen() {
     }
     setSelectedFile(null);
     setOcrResult(null);
-    setProgress(0);
-    setCurrentPage(0);
-    setTotalPages(0);
-    setProgressStatus('');
+    setEnhancedProgress(null);
+    progressTrackerRef.current = null;
   }, [selectedFile, ocrResult]);
 
   // Empty state
@@ -541,24 +514,6 @@ export default function ScanToSearchablePdfScreen() {
 
         <Spacer size="lg" />
 
-        {isProcessing && (
-          <>
-            <OcrProgress
-              progress={progress}
-              currentPage={currentPage}
-              totalPages={totalPages}
-              status={progressStatus}
-            />
-            <Spacer size="md" />
-            <Button
-              title="Cancel"
-              variant="outline"
-              onPress={handleCancel}
-              fullWidth
-            />
-          </>
-        )}
-
         <Spacer size="xl" />
       </ScrollView>
 
@@ -608,6 +563,16 @@ export default function ScanToSearchablePdfScreen() {
             onPress: () => setErrorModal((prev) => ({ ...prev, visible: false })),
           },
         ]}
+      />
+
+      <ProgressModal
+        visible={isProcessing}
+        title="Creating Searchable PDF"
+        progress={enhancedProgress}
+        color={colors.info}
+        icon="🔍"
+        onCancel={handleCancel}
+        cancelable={true}
       />
     </SafeScreen>
   );
@@ -679,25 +644,6 @@ const styles = StyleSheet.create({
   featureItem: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  progressCard: {
-    borderRadius: borderRadius.xl,
-    padding: spacing.lg,
-  },
-  progressHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  progressSpinner: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.md,
-  },
-  progressInfo: {
-    flex: 1,
   },
   resultCardInner: {
     padding: spacing.xl,

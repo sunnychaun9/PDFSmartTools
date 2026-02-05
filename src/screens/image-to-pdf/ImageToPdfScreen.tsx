@@ -19,8 +19,9 @@ import DraggableFlatList, {
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeScreen, Header, Spacer } from '../../components/layout';
 import { Button, Text, Icon, AppModal } from '../../components/ui';
-import { ProgressBar } from '../../components/feedback';
+import { ProgressModal } from '../../components/feedback';
 import { colors, spacing, borderRadius, shadows } from '../../theme';
+import { EnhancedProgress, ProgressTracker, createInitialProgress } from '../../utils/progressUtils';
 import { RootStackParamList, SelectedImage } from '../../navigation/types';
 import { requestImageToPdfPermissions, requestCameraPermission } from '../../utils/permissions';
 import { generatePdfFromImages, PdfGenerationResult } from '../../services/pdfGenerator';
@@ -44,8 +45,8 @@ export default function ImageToPdfScreen() {
   const { canProceedWithFeature, consumeFeatureUse } = useFeatureGate();
   const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [loadingProgress, setLoadingProgress] = useState(0);
-  const [loadingMessage, setLoadingMessage] = useState('');
+  const [enhancedProgress, setEnhancedProgress] = useState<EnhancedProgress | null>(null);
+  const progressTrackerRef = useRef<ProgressTracker | null>(null);
   const [previewImage, setPreviewImage] = useState<SelectedImage | null>(null);
   const [showAddOptions, setShowAddOptions] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -232,21 +233,21 @@ export default function ImageToPdfScreen() {
     }
 
     setIsLoading(true);
-    setLoadingProgress(0);
-    setLoadingMessage('Preparing images...');
+    const totalImages = selectedImages.length;
+    progressTrackerRef.current = new ProgressTracker(totalImages);
+    setEnhancedProgress(createInitialProgress(totalImages, 'Preparing images...'));
 
     try {
-      const progressInterval = setInterval(() => {
-        setLoadingProgress((prev) => {
-          if (prev >= 85) {
-            clearInterval(progressInterval);
-            return prev;
-          }
-          return prev + Math.random() * 15;
-        });
-      }, 200);
-
-      setLoadingMessage(`Processing ${selectedImages.length} image(s)...`);
+      // Simulate per-image progress since the native module may not report per-image
+      const updateProgressForImage = (imageIndex: number) => {
+        if (progressTrackerRef.current) {
+          const progress = progressTrackerRef.current.update(
+            imageIndex,
+            `Processing image ${imageIndex} of ${totalImages}...`
+          );
+          setEnhancedProgress(progress);
+        }
+      };
 
       const imageSources = selectedImages.map((img) => ({
         uri: img.uri,
@@ -254,14 +255,24 @@ export default function ImageToPdfScreen() {
         height: img.height,
       }));
 
+      // Start progress simulation for better UX (native module may not report granular progress)
+      let currentImage = 0;
+      const progressInterval = setInterval(() => {
+        if (currentImage < totalImages) {
+          currentImage++;
+          updateProgressForImage(currentImage);
+        }
+      }, Math.max(200, 2000 / totalImages)); // Spread progress across expected duration
+
       const result: PdfGenerationResult = await generatePdfFromImages(imageSources, {
         fitImageToPage: true,
         pageSize: 'A4',
       }, isPro);
 
       clearInterval(progressInterval);
-      setLoadingProgress(100);
-      setLoadingMessage('PDF created successfully!');
+      if (progressTrackerRef.current) {
+        setEnhancedProgress(progressTrackerRef.current.complete('PDF created successfully!'));
+      }
 
       // Get file size for recent files
       let fileSize = 0;
@@ -497,37 +508,6 @@ export default function ImageToPdfScreen() {
     );
   };
 
-  const renderLoadingOverlay = () => {
-    if (!isLoading) return null;
-
-    return (
-      <Modal transparent visible={isLoading} animationType="fade">
-        <View style={styles.loadingOverlay}>
-          <View style={[styles.loadingContainer, { backgroundColor: theme.surface }]}>
-            <View style={[styles.loadingIconContainer, { backgroundColor: `${colors.primary}15` }]}>
-              <Text style={styles.loadingIcon}>📄</Text>
-            </View>
-            <Spacer size="lg" />
-            <Text variant="h3" align="center" style={{ color: theme.textPrimary }}>
-              Creating PDF
-            </Text>
-            <Spacer size="sm" />
-            <Text variant="body" align="center" style={{ color: theme.textSecondary }}>
-              {loadingMessage}
-            </Text>
-            <Spacer size="lg" />
-            <View style={styles.progressContainer}>
-              <ProgressBar progress={loadingProgress} height={6} />
-              <Spacer size="sm" />
-              <Text variant="caption" align="center" style={{ color: theme.textTertiary }}>
-                {Math.round(loadingProgress)}%
-              </Text>
-            </View>
-          </View>
-        </View>
-      </Modal>
-    );
-  };
 
   return (
     <GestureHandlerRootView style={styles.gestureRoot}>
@@ -618,7 +598,15 @@ export default function ImageToPdfScreen() {
 
         {renderImagePreviewModal()}
         {renderAddOptionsSheet()}
-        {renderLoadingOverlay()}
+
+        <ProgressModal
+          visible={isLoading}
+          title="Creating PDF"
+          progress={enhancedProgress}
+          color={colors.imageToPdf}
+          icon="🖼️"
+          cancelable={false}
+        />
 
         {/* Permission Modal */}
         <AppModal
@@ -952,31 +940,5 @@ const styles = StyleSheet.create({
   },
   sheetOptionText: {
     flex: 1,
-  },
-  loadingOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingContainer: {
-    borderRadius: borderRadius.xl,
-    padding: spacing.xl,
-    width: SCREEN_WIDTH * 0.8,
-    maxWidth: 320,
-    alignItems: 'center',
-  },
-  loadingIconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingIcon: {
-    fontSize: 40,
-  },
-  progressContainer: {
-    width: '100%',
   },
 });

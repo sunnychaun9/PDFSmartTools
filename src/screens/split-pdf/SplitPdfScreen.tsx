@@ -12,7 +12,7 @@ import { SafeScreen, Header, Spacer } from '../../components/layout';
 import { Button, Text, Icon, AppModal } from '../../components/ui';
 import { ProgressModal } from '../../components/feedback';
 import { colors, spacing, borderRadius, shadows } from '../../theme';
-import { EnhancedProgress } from '../../utils/progressUtils';
+import { EnhancedProgress, ProgressTracker, createInitialProgress } from '../../utils/progressUtils';
 import { useTheme, useRating, useFeatureGate } from '../../context';
 import { pickPdfFile, PickedFile, cleanupPickedFile } from '../../services/filePicker';
 import {
@@ -77,7 +77,7 @@ export default function SplitPdfScreen() {
   const [enhancedProgress, setEnhancedProgress] = useState<EnhancedProgress | null>(null);
   const [splitResult, setSplitResult] = useState<SplitResult | null>(null);
   const [remainingUses, setRemainingUses] = useState<number>(Infinity);
-  const splitStartTime = useRef<number>(0);
+  const progressTrackerRef = useRef<ProgressTracker | null>(null);
 
   // Modal states
   const [errorModal, setErrorModal] = useState<{
@@ -187,16 +187,8 @@ export default function SplitPdfScreen() {
     }
 
     setIsSplitting(true);
-    splitStartTime.current = Date.now();
-    setEnhancedProgress({
-      progress: 0,
-      currentItem: 0,
-      totalItems: ranges.length,
-      status: 'Initializing...',
-      elapsedMs: 0,
-      estimatedRemainingMs: -1,
-      estimatedTotalMs: -1,
-    });
+    progressTrackerRef.current = new ProgressTracker(ranges.length);
+    setEnhancedProgress(createInitialProgress(ranges.length, 'Initializing...'));
 
     try {
       const baseName = selectedFile.name.replace('.pdf', '');
@@ -205,16 +197,15 @@ export default function SplitPdfScreen() {
         ranges,
         isPro,
         onProgress: (progressInfo) => {
-          const elapsedMs = Date.now() - splitStartTime.current;
-          setEnhancedProgress({
-            progress: progressInfo.progress,
-            currentItem: 0,
-            totalItems: ranges.length,
-            status: progressInfo.status,
-            elapsedMs,
-            estimatedRemainingMs: -1,
-            estimatedTotalMs: -1,
-          });
+          if (progressTrackerRef.current) {
+            // Extract current range number from status or use progress percentage
+            const currentRange = Math.max(1, Math.ceil((progressInfo.progress / 100) * ranges.length));
+            const progress = progressTrackerRef.current.update(
+              currentRange,
+              `Splitting range ${currentRange} of ${ranges.length}...`
+            );
+            setEnhancedProgress(progress);
+          }
         },
       });
 

@@ -8,6 +8,8 @@ import {
   formatElapsed,
   getProgressText,
   normalizeProgress,
+  createInitialProgress,
+  ProgressTracker,
   EnhancedProgress,
 } from '../../src/utils/progressUtils';
 
@@ -214,6 +216,98 @@ describe('progressUtils', () => {
     it('should handle boundary values at 1 hour', () => {
       expect(formatTimeRemaining(3599999)).toMatch(/59 min \d+ sec remaining/);
       expect(formatTimeRemaining(3600000)).toBe('1 hr 0 min remaining');
+    });
+  });
+
+  describe('createInitialProgress', () => {
+    it('should create initial progress with defaults', () => {
+      const result = createInitialProgress(10);
+      expect(result.progress).toBe(0);
+      expect(result.currentItem).toBe(0);
+      expect(result.totalItems).toBe(10);
+      expect(result.status).toBe('Initializing...');
+      expect(result.elapsedMs).toBe(0);
+      expect(result.estimatedRemainingMs).toBe(-1);
+      expect(result.estimatedTotalMs).toBe(-1);
+    });
+
+    it('should accept custom status', () => {
+      const result = createInitialProgress(5, 'Starting OCR...');
+      expect(result.status).toBe('Starting OCR...');
+      expect(result.totalItems).toBe(5);
+    });
+  });
+
+  describe('ProgressTracker', () => {
+    it('should initialize with correct values', () => {
+      const tracker = new ProgressTracker(10);
+      const progress = tracker.getCurrent('Starting...');
+
+      expect(progress.totalItems).toBe(10);
+      expect(progress.currentItem).toBe(0);
+      expect(progress.progress).toBe(0);
+    });
+
+    it('should update progress correctly', () => {
+      const tracker = new ProgressTracker(10);
+
+      const progress1 = tracker.update(1, 'Processing item 1');
+      expect(progress1.currentItem).toBe(1);
+      expect(progress1.progress).toBe(10);
+      expect(progress1.status).toBe('Processing item 1');
+
+      const progress5 = tracker.update(5, 'Processing item 5');
+      expect(progress5.currentItem).toBe(5);
+      expect(progress5.progress).toBe(50);
+    });
+
+    it('should complete with 100% progress', () => {
+      const tracker = new ProgressTracker(5);
+      tracker.update(3, 'Processing...');
+
+      const completed = tracker.complete('Done!');
+      expect(completed.progress).toBe(100);
+      expect(completed.currentItem).toBe(5);
+      expect(completed.totalItems).toBe(5);
+      expect(completed.status).toBe('Done!');
+      expect(completed.estimatedRemainingMs).toBe(0);
+    });
+
+    it('should reset tracker', () => {
+      const tracker = new ProgressTracker(10);
+      tracker.update(5, 'Halfway');
+
+      tracker.reset(20);
+      const progress = tracker.getCurrent('Restarted');
+
+      expect(progress.totalItems).toBe(20);
+      expect(progress.currentItem).toBe(0);
+    });
+
+    it('should track elapsed time', async () => {
+      const tracker = new ProgressTracker(5);
+
+      // Small delay to ensure elapsed time is measurable
+      await new Promise<void>(resolve => setTimeout(resolve, 10));
+
+      const elapsed = tracker.getElapsedMs();
+      expect(elapsed).toBeGreaterThanOrEqual(10);
+    });
+
+    it('should handle edge case of 0 total items', () => {
+      const tracker = new ProgressTracker(0);
+      const progress = tracker.update(0, 'Empty');
+
+      expect(progress.progress).toBe(0);
+      expect(progress.totalItems).toBe(0);
+    });
+
+    it('should clamp progress to 100', () => {
+      const tracker = new ProgressTracker(5);
+      // Attempt to set currentItem beyond totalItems
+      const progress = tracker.update(10, 'Over');
+
+      expect(progress.progress).toBe(100);
     });
   });
 });

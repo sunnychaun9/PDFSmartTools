@@ -864,6 +864,7 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     borderWidth: 1.5,
     padding: spacing.md,
+    minHeight: 70,
   },
   optionContent: {
     flex: 1,

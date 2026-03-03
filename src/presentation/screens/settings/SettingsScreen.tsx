@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   TouchableWithoutFeedback,
 } from 'react-native';
+import { Text as NativeText } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeScreen } from '../../components/layout';
@@ -577,98 +578,75 @@ function SettingsScreen() {
       <Modal
         visible={showCompressionModal}
         transparent
-        animationType="none"
+        animationType="fade"
         onRequestClose={() => hideModal('compression')}
       >
         <TouchableWithoutFeedback onPress={() => hideModal('compression')}>
           <View style={styles.modalOverlay}>
             <TouchableWithoutFeedback>
-              <Animated.View
+              <View
                 style={[
                   styles.modalContent,
-                  {
-                    backgroundColor: theme.surface,
-                    transform: [
-                      {
-                        scale: modalAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [0.9, 1],
-                        }),
-                      },
-                    ],
-                    opacity: modalAnim,
-                  },
+                  { backgroundColor: theme.surface },
                 ]}
               >
-                <Text
-                  variant="h3"
-                  style={{ color: theme.textPrimary, marginBottom: spacing.lg }}
+                <NativeText
+                  style={[
+                    styles.modalTitle,
+                    { color: theme.textPrimary },
+                  ]}
                 >
                   Default Compression
-                </Text>
-                {COMPRESSION_OPTIONS.map((option, index) => (
-                  <TouchableOpacity
-                    key={option.value}
-                    style={[
-                      styles.optionItem,
-                      {
-                        backgroundColor:
-                          appSettings.defaultCompression === option.value
-                            ? `${colors.primary}15`
-                            : 'transparent',
-                        borderColor:
-                          appSettings.defaultCompression === option.value
-                            ? colors.primary
-                            : theme.border,
-                      },
-                      index > 0 && { marginTop: spacing.sm },
-                    ]}
-                    onPress={() => handleCompressionChange(option.value)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.optionContent}>
-                      <View style={styles.optionHeader}>
-                        <Text
-                          variant="body"
-                          style={{
-                            color: theme.textPrimary,
-                            fontWeight:
-                              appSettings.defaultCompression === option.value
-                                ? '600'
-                                : '400',
-                          }}
-                        >
+                </NativeText>
+                {COMPRESSION_OPTIONS.map((option, index) => {
+                  const isSelected = appSettings.defaultCompression === option.value;
+                  return (
+                    <Pressable
+                      key={option.value}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        borderRadius: 12,
+                        borderWidth: 1.5,
+                        borderColor: isSelected ? colors.primary : theme.border,
+                        backgroundColor: isSelected ? `${colors.primary}15` : 'transparent',
+                        padding: 14,
+                        marginTop: index > 0 ? 8 : 0,
+                      }}
+                      onPress={() => handleCompressionChange(option.value)}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <NativeText style={{ fontSize: 15, fontWeight: isSelected ? '600' : '400', color: theme.textPrimary }}>
                           {option.label}
-                        </Text>
-                        {appSettings.defaultCompression === option.value && (
-                          <View
-                            style={[
-                              styles.checkCircle,
-                              { backgroundColor: colors.primary },
-                            ]}
-                          >
-                            <Icon name="check" size={14} color={colors.textOnPrimary} />
-                          </View>
-                        )}
+                        </NativeText>
+                        <NativeText style={{ fontSize: 12, color: theme.textSecondary, marginTop: 3 }}>
+                          {option.description}
+                        </NativeText>
                       </View>
-                      <Text
-                        variant="caption"
-                        style={{ color: theme.textTertiary, marginTop: 2 }}
-                      >
-                        {option.description}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-                <TouchableOpacity
-                  style={[styles.cancelButton, { borderColor: theme.border }]}
+                      {isSelected && (
+                        <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginLeft: 8 }}>
+                          <Icon name="check" size={14} color={colors.textOnPrimary} />
+                        </View>
+                      )}
+                    </Pressable>
+                  );
+                })}
+                <Pressable
+                  style={{
+                    marginTop: 16,
+                    paddingVertical: 14,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: theme.border,
+                    alignItems: 'center',
+                  }}
                   onPress={() => hideModal('compression')}
                 >
-                  <Text variant="body" style={{ color: theme.textSecondary }}>
+                  <NativeText style={{ fontSize: 15, color: theme.textSecondary }}>
                     Cancel
-                  </Text>
-                </TouchableOpacity>
-              </Animated.View>
+                  </NativeText>
+                </Pressable>
+              </View>
             </TouchableWithoutFeedback>
           </View>
         </TouchableWithoutFeedback>
@@ -678,35 +656,26 @@ function SettingsScreen() {
       <Modal
         visible={showLocationModal}
         transparent
-        animationType="none"
+        animationType="fade"
         onRequestClose={() => hideModal('location')}
       >
         <TouchableWithoutFeedback onPress={() => hideModal('location')}>
           <View style={styles.modalOverlay}>
             <TouchableWithoutFeedback>
-              <Animated.View
+              <View
                 style={[
                   styles.modalContent,
-                  {
-                    backgroundColor: theme.surface,
-                    transform: [
-                      {
-                        scale: modalAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [0.9, 1],
-                        }),
-                      },
-                    ],
-                    opacity: modalAnim,
-                  },
+                  { backgroundColor: theme.surface },
                 ]}
               >
-                <Text
-                  variant="h3"
-                  style={{ color: theme.textPrimary, marginBottom: spacing.md }}
+                <NativeText
+                  style={[
+                    styles.modalTitle,
+                    { color: theme.textPrimary },
+                  ]}
                 >
                   Save Location
-                </Text>
+                </NativeText>
                 <View
                   style={[
                     styles.locationInfo,
@@ -715,146 +684,120 @@ function SettingsScreen() {
                 >
                   <Icon name="download" size={24} color={colors.viewPdf} />
                   <View style={{ marginLeft: spacing.md, flex: 1 }}>
-                    <Text variant="body" style={{ color: theme.textPrimary }}>
+                    <NativeText style={{ fontSize: 15, color: theme.textPrimary }}>
                       Downloads/{appSettings.saveLocation}
-                    </Text>
-                    <Text
-                      variant="caption"
-                      style={{ color: theme.textTertiary, marginTop: 4 }}
-                    >
+                    </NativeText>
+                    <NativeText style={{ fontSize: 12, color: theme.textTertiary, marginTop: 4 }}>
                       All PDFs are saved to this folder
-                    </Text>
+                    </NativeText>
                   </View>
                 </View>
                 <View
                   style={[styles.infoBox, { backgroundColor: theme.surfaceVariant }]}
                 >
                   <Icon name="info" size={16} color={theme.textTertiary} />
-                  <Text
-                    variant="caption"
+                  <NativeText
                     style={{
+                      fontSize: 12,
                       color: theme.textTertiary,
                       marginLeft: spacing.sm,
                       flex: 1,
                     }}
                   >
                     The save location is set to ensure your files are easily accessible in the Downloads folder.
-                  </Text>
+                  </NativeText>
                 </View>
                 <TouchableOpacity
                   style={[styles.doneButton, { backgroundColor: colors.primary }]}
                   onPress={() => hideModal('location')}
                 >
-                  <Text variant="body" style={{ color: colors.textOnPrimary, fontWeight: '600' }}>
+                  <NativeText style={{ fontSize: 15, color: colors.textOnPrimary, fontWeight: '600' }}>
                     Got it
-                  </Text>
+                  </NativeText>
                 </TouchableOpacity>
-              </Animated.View>
+              </View>
             </TouchableWithoutFeedback>
           </View>
         </TouchableWithoutFeedback>
       </Modal>
 
-      {/* FIX: Post-audit hardening – Theme Selection Modal */}
+      {/* Theme Selection Modal */}
       <Modal
         visible={showThemeModal}
         transparent
-        animationType="none"
+        animationType="fade"
         onRequestClose={() => hideModal('theme')}
       >
         <TouchableWithoutFeedback onPress={() => hideModal('theme')}>
           <View style={styles.modalOverlay}>
             <TouchableWithoutFeedback>
-              <Animated.View
+              <View
                 style={[
                   styles.modalContent,
-                  {
-                    backgroundColor: theme.surface,
-                    transform: [
-                      {
-                        scale: modalAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [0.9, 1],
-                        }),
-                      },
-                    ],
-                    opacity: modalAnim,
-                  },
+                  { backgroundColor: theme.surface },
                 ]}
               >
-                <Text
-                  variant="h3"
-                  style={{ color: theme.textPrimary, marginBottom: spacing.lg }}
+                <NativeText
+                  style={[
+                    styles.modalTitle,
+                    { color: theme.textPrimary },
+                  ]}
                 >
                   Choose Theme
-                </Text>
+                </NativeText>
                 {[
                   { value: 'system' as const, label: 'System default', description: 'Follow device settings' },
                   { value: 'light' as const, label: 'Light', description: 'Always use light theme' },
                   { value: 'dark' as const, label: 'Dark', description: 'Always use dark theme' },
-                ].map((option, index) => (
-                  <TouchableOpacity
-                    key={option.value}
-                    style={[
-                      styles.optionItem,
-                      {
-                        backgroundColor:
-                          themeMode === option.value
-                            ? `${colors.primary}15`
-                            : 'transparent',
-                        borderColor:
-                          themeMode === option.value
-                            ? colors.primary
-                            : theme.border,
-                      },
-                      index > 0 && { marginTop: spacing.sm },
-                    ]}
-                    onPress={() => handleThemeModeChange(option.value)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.optionContent}>
-                      <View style={styles.optionHeader}>
-                        <Text
-                          variant="body"
-                          style={{
-                            color: theme.textPrimary,
-                            fontWeight:
-                              themeMode === option.value
-                                ? '600'
-                                : '400',
-                          }}
-                        >
+                ].map((option, index) => {
+                  const isSelected = themeMode === option.value;
+                  return (
+                    <Pressable
+                      key={option.value}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        borderRadius: 12,
+                        borderWidth: 1.5,
+                        borderColor: isSelected ? colors.primary : theme.border,
+                        backgroundColor: isSelected ? `${colors.primary}15` : 'transparent',
+                        padding: 14,
+                        marginTop: index > 0 ? 8 : 0,
+                      }}
+                      onPress={() => handleThemeModeChange(option.value)}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <NativeText style={{ fontSize: 15, fontWeight: isSelected ? '600' : '400', color: theme.textPrimary }}>
                           {option.label}
-                        </Text>
-                        {themeMode === option.value && (
-                          <View
-                            style={[
-                              styles.checkCircle,
-                              { backgroundColor: colors.primary },
-                            ]}
-                          >
-                            <Icon name="check" size={14} color={colors.textOnPrimary} />
-                          </View>
-                        )}
+                        </NativeText>
+                        <NativeText style={{ fontSize: 12, color: theme.textSecondary, marginTop: 3 }}>
+                          {option.description}
+                        </NativeText>
                       </View>
-                      <Text
-                        variant="caption"
-                        style={{ color: theme.textTertiary, marginTop: 2 }}
-                      >
-                        {option.description}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                ))}
-                <TouchableOpacity
-                  style={[styles.cancelButton, { borderColor: theme.border }]}
+                      {isSelected && (
+                        <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginLeft: 8 }}>
+                          <Icon name="check" size={14} color={colors.textOnPrimary} />
+                        </View>
+                      )}
+                    </Pressable>
+                  );
+                })}
+                <Pressable
+                  style={{
+                    marginTop: 16,
+                    paddingVertical: 14,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: theme.border,
+                    alignItems: 'center',
+                  }}
                   onPress={() => hideModal('theme')}
                 >
-                  <Text variant="body" style={{ color: theme.textSecondary }}>
+                  <NativeText style={{ fontSize: 15, color: theme.textSecondary }}>
                     Cancel
-                  </Text>
-                </TouchableOpacity>
-              </Animated.View>
+                  </NativeText>
+                </Pressable>
+              </View>
             </TouchableWithoutFeedback>
           </View>
         </TouchableWithoutFeedback>
@@ -981,7 +924,14 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     ...shadows.lg,
   },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: spacing.lg,
+  },
   optionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderRadius: borderRadius.lg,
     borderWidth: 1.5,
     padding: spacing.md,

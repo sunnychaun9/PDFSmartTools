@@ -1,37 +1,61 @@
 /**
  * Firebase Performance Monitoring with custom traces
  * Tracks operation timing for key PDF features
+ * Gracefully no-ops when Firebase is not configured
  */
 
-import perf, { FirebasePerformanceTypes } from '@react-native-firebase/perf';
 import { getPrivacySettings } from '../../data/storage/pdfStorage';
+import { isFirebaseAvailable } from '../firebaseGuard';
 
 let initialized = false;
+
+function getPerf() {
+  if (!isFirebaseAvailable()) return null;
+  try {
+    const mod = require('@react-native-firebase/perf');
+    return (mod.default || mod)();
+  } catch (_) {}
+  return null;
+}
 
 /**
  * Initialize performance monitoring with privacy settings
  */
 export async function initPerformance(): Promise<void> {
   if (initialized) return;
-  const privacy = await getPrivacySettings();
-  await perf().setPerformanceCollectionEnabled(privacy.performanceEnabled);
-  initialized = true;
+  try {
+    const instance = getPerf();
+    if (!instance) return;
+    const privacy = await getPrivacySettings();
+    await instance.setPerformanceCollectionEnabled(privacy.performanceEnabled);
+    initialized = true;
+  } catch (_) {}
 }
 
 /**
  * Enable or disable performance collection
  */
 export async function setPerformanceEnabled(enabled: boolean): Promise<void> {
-  await perf().setPerformanceCollectionEnabled(enabled);
+  try { getPerf()?.setPerformanceCollectionEnabled(enabled); } catch (_) {}
 }
 
 /**
  * Start a custom trace for measuring operation duration
- * Returns stop/attribute functions
+ * Returns stop/attribute functions, or a no-op stub if Firebase unavailable
  */
-export async function startTrace(name: string): Promise<FirebasePerformanceTypes.Trace> {
-  const trace = await perf().startTrace(name);
-  return trace;
+export async function startTrace(name: string): Promise<any> {
+  try {
+    const instance = getPerf();
+    if (instance) {
+      return await instance.startTrace(name);
+    }
+  } catch (_) {}
+  // Return a no-op stub
+  return {
+    putAttribute: () => {},
+    putMetric: () => {},
+    stop: async () => {},
+  };
 }
 
 /**
@@ -43,7 +67,7 @@ export async function measureOperation<T>(
   operation: () => Promise<T>,
   attributes?: Record<string, string>,
 ): Promise<T> {
-  const trace = await perf().startTrace(traceName);
+  const trace = await startTrace(traceName);
 
   if (attributes) {
     Object.entries(attributes).forEach(([key, value]) => {

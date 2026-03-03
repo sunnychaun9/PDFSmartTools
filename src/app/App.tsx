@@ -14,10 +14,11 @@ export default function App() {
 
   useEffect(() => {
     // Initialize Firebase services (respects privacy settings)
-    initCrashlytics();
-    initAnalytics();
-    initPerformance();
-    checkDeviceSecurity();
+    // Each init function is safe to call without google-services.json
+    initCrashlytics().catch(() => {});
+    initAnalytics().catch(() => {});
+    initPerformance().catch(() => {});
+    checkDeviceSecurity().catch(() => {});
 
     isOnboardingComplete().then((complete) => {
       setShowOnboarding(!complete);

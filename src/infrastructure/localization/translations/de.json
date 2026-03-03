@@ -1,0 +1,43 @@
+{
+  "app_name": "PDF Smart Tools",
+  "greeting_morning": "Guten Morgen",
+  "greeting_afternoon": "Guten Tag",
+  "greeting_evening": "Guten Abend",
+  "home_subtitle": "Was möchten Sie heute tun?",
+
+  "tool_scan": "Dokument scannen",
+  "tool_scan_desc": "Kamera zu PDF",
+  "tool_image_to_pdf": "Bild zu PDF",
+  "tool_image_to_pdf_desc": "Fotos in PDF umwandeln",
+  "tool_compress": "PDF komprimieren",
+  "tool_compress_desc": "Dateigröße reduzieren",
+  "tool_merge": "PDFs zusammenführen",
+  "tool_merge_desc": "PDF-Dateien kombinieren",
+  "tool_ocr": "Text extrahieren",
+  "tool_ocr_desc": "OCR aus Bildern",
+  "tool_sign": "PDF unterschreiben",
+  "tool_sign_desc": "Unterschrift hinzufügen",
+  "tool_split": "PDF teilen",
+  "tool_split_desc": "Seiten extrahieren",
+  "tool_protect": "PDF schützen",
+  "tool_protect_desc": "Passwortschutz hinzufügen",
+  "tool_unlock": "PDF entsperren",
+  "tool_unlock_desc": "Passwort entfernen",
+
+  "nav_home": "Start",
+  "nav_recent": "Zuletzt",
+  "nav_settings": "Einstellungen",
+
+  "common_cancel": "Abbrechen",
+  "common_ok": "OK",
+  "common_error": "Fehler",
+  "common_success": "Erfolg",
+  "common_loading": "Laden...",
+  "common_processing": "Verarbeitung...",
+
+  "upgrade_title": "Tageslimit erreicht",
+  "upgrade_message": "Sie haben alle kostenlosen Nutzungen für heute aufgebraucht. Upgraden Sie auf Pro für unbegrenzten Zugang.",
+  "upgrade_button": "Auf Pro upgraden",
+
+  "error_generic": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut."
+}

@@ -1,27 +1,18 @@
 package com.pdfsmarttools.pdftoimage
 
-import android.graphics.Bitmap
-import android.graphics.pdf.PdfRenderer
-import android.os.ParcelFileDescriptor
-import android.util.Log
 import com.facebook.react.bridge.*
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import kotlinx.coroutines.*
-import java.io.File
-import java.io.FileOutputStream
 
+/**
+ * Thin React Native bridge for PDF-to-image conversion.
+ * All processing logic is in PdfToImageEngine.
+ */
 class PdfToImageModule(private val reactContext: ReactApplicationContext) :
     ReactContextBaseJavaModule(reactContext) {
 
-    companion object {
-        private const val TAG = "PdfToImageModule"
-        // Maximum bitmap size in pixels to prevent OOM (approximately 100MB for RGB_565)
-        private const val MAX_BITMAP_PIXELS = 50_000_000L
-        // Batch size for GC
-        private const val PAGE_BATCH_SIZE = 3
-    }
-
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val engine = PdfToImageEngine()
 
     override fun getName(): String = "PdfToImage"
 
@@ -31,27 +22,12 @@ class PdfToImageModule(private val reactContext: ReactApplicationContext) :
             .emit(eventName, params)
     }
 
-    /**
-     * Get the total number of pages in a PDF
-     */
     @ReactMethod
     fun getPageCount(inputPath: String, promise: Promise) {
         scope.launch {
             try {
-                val file = File(inputPath)
-                if (!file.exists()) {
-                    promise.reject("FILE_NOT_FOUND", "PDF file not found: $inputPath")
-                    return@launch
-                }
-
-                val parcelFileDescriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
-                val pdfRenderer = PdfRenderer(parcelFileDescriptor)
-                val pageCount = pdfRenderer.pageCount
-
-                pdfRenderer.close()
-                parcelFileDescriptor.close()
-
-                promise.resolve(pageCount)
+                val count = engine.getPageCount(inputPath, reactContext)
+                promise.resolve(count)
             } catch (e: SecurityException) {
                 promise.reject("PDF_ENCRYPTED", "This PDF is password protected and cannot be opened", e)
             } catch (e: Exception) {
@@ -60,18 +36,6 @@ class PdfToImageModule(private val reactContext: ReactApplicationContext) :
         }
     }
 
-    /**
-     * Convert PDF pages to images
-     *
-     * @param inputPath Path to the PDF file
-     * @param outputDir Directory to save images
-     * @param format Image format: "png" or "jpg"
-     * @param pageIndices Array of page indices to convert (0-based). Empty array means all pages.
-     * @param quality Quality setting for JPEG (0-100). Ignored for PNG.
-     * @param maxResolution Max resolution in pixels (width or height, whichever is larger)
-     * @param isPro Whether the user is a Pro subscriber
-     * @param promise React Native promise
-     */
     @ReactMethod
     fun convertToImages(
         inputPath: String,
@@ -84,124 +48,36 @@ class PdfToImageModule(private val reactContext: ReactApplicationContext) :
         promise: Promise
     ) {
         scope.launch {
-            var pdfRenderer: PdfRenderer? = null
-            var parcelFileDescriptor: ParcelFileDescriptor? = null
-
             try {
-                val file = File(inputPath)
-                if (!file.exists()) {
-                    promise.reject("FILE_NOT_FOUND", "PDF file not found: $inputPath")
-                    return@launch
-                }
+                val indices = (0 until pageIndices.size()).map { pageIndices.getInt(it) }
 
-                // Create output directory if it doesn't exist
-                val outputDirectory = File(outputDir)
-                if (!outputDirectory.exists()) {
-                    outputDirectory.mkdirs()
-                }
+                val options = PdfToImageEngine.ConversionOptions(
+                    inputPath = inputPath,
+                    outputDir = outputDir,
+                    format = format,
+                    pageIndices = indices,
+                    quality = quality,
+                    maxResolution = maxResolution,
+                    isPro = isPro
+                )
 
-                parcelFileDescriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
-                pdfRenderer = PdfRenderer(parcelFileDescriptor)
-
-                val totalPages = pdfRenderer.pageCount
-                val baseName = file.nameWithoutExtension
-
-                // Determine which pages to convert
-                val pagesToConvert = if (pageIndices.size() == 0) {
-                    // Convert all pages
-                    (0 until totalPages).toList()
-                } else {
-                    // Convert specified pages
-                    (0 until pageIndices.size()).map { pageIndices.getInt(it) }
-                        .filter { it in 0 until totalPages }
-                }
-
-                // Pro gating: Free users can only convert 1 page
-                val actualPagesToConvert = if (!isPro && pagesToConvert.size > 1) {
-                    listOf(pagesToConvert.first())
-                } else {
-                    pagesToConvert
-                }
-
-                // Resolution limits: Free users get max 1024px, Pro users get up to 300 DPI equivalent
-                val effectiveMaxResolution = if (!isPro) {
-                    minOf(maxResolution, 1024)
-                } else {
-                    maxResolution
-                }
-
-                val outputPaths = mutableListOf<String>()
-                val imageFormat = format.lowercase()
-                val compressFormat = if (imageFormat == "png") Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG
-                val extension = if (imageFormat == "png") "png" else "jpg"
-                val effectiveQuality = if (imageFormat == "png") 100 else quality
-
-                for ((index, pageIndex) in actualPagesToConvert.withIndex()) {
-                    // Send progress event
-                    val progressParams = Arguments.createMap().apply {
-                        putInt("currentPage", index + 1)
-                        putInt("totalPages", actualPagesToConvert.size)
-                        putInt("progress", ((index + 1) * 100) / actualPagesToConvert.size)
+                val result = engine.convertToImages(options, reactContext) { currentPage, totalPages, pageIndex ->
+                    val params = Arguments.createMap().apply {
+                        putInt("currentPage", currentPage)
+                        putInt("totalPages", totalPages)
+                        putInt("progress", (currentPage * 100) / totalPages)
                         putInt("pageIndex", pageIndex)
                     }
-                    sendEvent("PdfToImageProgress", progressParams)
-
-                    val page = pdfRenderer.openPage(pageIndex)
-
-                    // Calculate dimensions maintaining aspect ratio with memory limits
-                    val originalWidth = page.width
-                    val originalHeight = page.height
-                    var scale = calculateScale(originalWidth, originalHeight, effectiveMaxResolution)
-                    var scaledWidth = (originalWidth * scale).toInt()
-                    var scaledHeight = (originalHeight * scale).toInt()
-
-                    // Check if bitmap would be too large and reduce if necessary
-                    val pixelCount = scaledWidth.toLong() * scaledHeight.toLong()
-                    if (pixelCount > MAX_BITMAP_PIXELS) {
-                        val reductionFactor = Math.sqrt(MAX_BITMAP_PIXELS.toDouble() / pixelCount.toDouble())
-                        scaledWidth = (scaledWidth * reductionFactor).toInt()
-                        scaledHeight = (scaledHeight * reductionFactor).toInt()
-                        Log.d(TAG, "Page ${pageIndex + 1}: Reduced dimensions to ${scaledWidth}x${scaledHeight} to fit memory limits")
-                    }
-
-                    // Use RGB_565 for JPEG output (no alpha needed), ARGB_8888 for PNG (supports transparency)
-                    val bitmapConfig = if (imageFormat == "png") Bitmap.Config.ARGB_8888 else Bitmap.Config.RGB_565
-                    val bitmap = Bitmap.createBitmap(scaledWidth, scaledHeight, bitmapConfig)
-
-                    // Fill with white background for JPEG (since JPEG doesn't support transparency)
-                    if (imageFormat != "png") {
-                        bitmap.eraseColor(android.graphics.Color.WHITE)
-                    }
-
-                    page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                    page.close()
-
-                    // Save bitmap to file
-                    val outputFileName = "${baseName}_page_${pageIndex + 1}.$extension"
-                    val outputFile = File(outputDirectory, outputFileName)
-
-                    FileOutputStream(outputFile).use { out ->
-                        bitmap.compress(compressFormat, effectiveQuality, out)
-                    }
-
-                    // Immediately recycle bitmap to free memory
-                    bitmap.recycle()
-                    outputPaths.add(outputFile.absolutePath)
-
-                    // Trigger GC periodically to prevent memory buildup
-                    if ((index + 1) % PAGE_BATCH_SIZE == 0) {
-                        System.gc()
-                    }
+                    sendEvent("PdfToImageProgress", params)
                 }
 
-                // Build response
                 val response = Arguments.createMap().apply {
-                    putArray("outputPaths", Arguments.fromList(outputPaths))
-                    putInt("pageCount", actualPagesToConvert.size)
-                    putInt("totalPdfPages", totalPages)
-                    putString("format", extension)
-                    putInt("resolution", effectiveMaxResolution)
-                    putBoolean("wasLimited", !isPro && pagesToConvert.size > 1)
+                    putArray("outputPaths", Arguments.fromList(result.outputPaths))
+                    putInt("pageCount", result.pageCount)
+                    putInt("totalPdfPages", result.totalPdfPages)
+                    putString("format", result.format)
+                    putInt("resolution", result.resolution)
+                    putBoolean("wasLimited", result.wasLimited)
                 }
 
                 promise.resolve(response)
@@ -213,44 +89,16 @@ class PdfToImageModule(private val reactContext: ReactApplicationContext) :
             } catch (e: Exception) {
                 promise.reject("CONVERSION_ERROR", e.message ?: "Unknown error during conversion", e)
             } finally {
-                try {
-                    pdfRenderer?.close()
-                    parcelFileDescriptor?.close()
-                } catch (e: Exception) {
-                    // Ignore cleanup errors
-                }
-                // Final cleanup
                 System.gc()
             }
         }
     }
 
-    /**
-     * Calculate scale factor to fit within max resolution while maintaining aspect ratio
-     * Limited to prevent excessive memory usage
-     */
-    private fun calculateScale(width: Int, height: Int, maxResolution: Int): Float {
-        val maxDimension = maxOf(width, height)
-        return if (maxDimension > maxResolution) {
-            maxResolution.toFloat() / maxDimension.toFloat()
-        } else {
-            // For higher resolution (Pro users), scale up if needed
-            // Default PDF rendering is 72 DPI, scale up to achieve higher DPI
-            val scaleFactor = maxResolution.toFloat() / maxDimension.toFloat()
-            // Cap at 3x to prevent memory issues (reduced from 4x)
-            minOf(scaleFactor, 3.0f)
-        }
-    }
+    @ReactMethod
+    fun addListener(eventName: String) {}
 
     @ReactMethod
-    fun addListener(eventName: String) {
-        // Required for RN event emitter
-    }
-
-    @ReactMethod
-    fun removeListeners(count: Int) {
-        // Required for RN event emitter
-    }
+    fun removeListeners(count: Int) {}
 
     override fun invalidate() {
         super.invalidate()

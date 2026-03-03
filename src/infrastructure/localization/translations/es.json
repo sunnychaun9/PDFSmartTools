@@ -1,0 +1,43 @@
+{
+  "app_name": "PDF Smart Tools",
+  "greeting_morning": "Buenos días",
+  "greeting_afternoon": "Buenas tardes",
+  "greeting_evening": "Buenas noches",
+  "home_subtitle": "¿Qué te gustaría hacer hoy?",
+
+  "tool_scan": "Escanear Documento",
+  "tool_scan_desc": "Cámara a PDF",
+  "tool_image_to_pdf": "Imagen a PDF",
+  "tool_image_to_pdf_desc": "Convertir fotos a PDF",
+  "tool_compress": "Comprimir PDF",
+  "tool_compress_desc": "Reducir tamaño",
+  "tool_merge": "Fusionar PDFs",
+  "tool_merge_desc": "Combinar archivos PDF",
+  "tool_ocr": "Extraer Texto",
+  "tool_ocr_desc": "OCR de imágenes",
+  "tool_sign": "Firmar PDF",
+  "tool_sign_desc": "Añadir firma",
+  "tool_split": "Dividir PDF",
+  "tool_split_desc": "Extraer páginas",
+  "tool_protect": "Proteger PDF",
+  "tool_protect_desc": "Añadir contraseña",
+  "tool_unlock": "Desbloquear PDF",
+  "tool_unlock_desc": "Eliminar contraseña",
+
+  "nav_home": "Inicio",
+  "nav_recent": "Recientes",
+  "nav_settings": "Ajustes",
+
+  "common_cancel": "Cancelar",
+  "common_ok": "Aceptar",
+  "common_error": "Error",
+  "common_success": "Éxito",
+  "common_loading": "Cargando...",
+  "common_processing": "Procesando...",
+
+  "upgrade_title": "Límite Diario Alcanzado",
+  "upgrade_message": "Has usado todos tus usos gratuitos de hoy. Actualiza a Pro para acceso ilimitado.",
+  "upgrade_button": "Actualizar a Pro",
+
+  "error_generic": "Algo salió mal. Inténtalo de nuevo."
+}

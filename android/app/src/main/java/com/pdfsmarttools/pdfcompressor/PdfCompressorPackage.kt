@@ -8,8 +8,7 @@ import com.facebook.react.uimanager.ViewManager
 class PdfCompressorPackage : ReactPackage {
     override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> {
         return listOf(
-            PdfCompressorModule(reactContext),
-            FilePickerModule(reactContext)
+            PdfCompressorModule(reactContext)
         )
     }
 

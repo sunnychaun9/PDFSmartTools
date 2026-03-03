@@ -1,0 +1,11 @@
+name = "pdfsmarttools-receipt-validator"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# Deploy with: wrangler publish
+# Set secrets with:
+#   wrangler secret put GOOGLE_SERVICE_ACCOUNT_KEY
+#   wrangler secret put API_SECRET
+
+[vars]
+# Non-secret environment variables (if any)

@@ -11,12 +11,15 @@ import android.provider.MediaStore
 import android.util.Log
 import android.os.SystemClock
 import com.facebook.react.bridge.*
+import com.pdfsmarttools.common.ParallelPageProcessor
+import com.pdfsmarttools.common.ProgressTracker
+import kotlinx.coroutines.*
 import java.io.*
-import java.util.concurrent.Executors
 
-class ScanPdfModule(reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
-    private val executor = Executors.newSingleThreadExecutor()
+class ScanPdfModule(private val reactContext: ReactApplicationContext) : ReactContextBaseJavaModule(reactContext) {
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val TAG = "ScanPdfModule"
+    private var currentJob: Job? = null
 
     override fun getName(): String = "ScanPdfModule"
 
@@ -26,12 +29,18 @@ class ScanPdfModule(reactContext: ReactApplicationContext) : ReactContextBaseJav
     @ReactMethod
     fun generatePdf(pagePaths: ReadableArray, options: ReadableMap, promise: Promise) {
         val ctx = reactApplicationContext
-        executor.execute {
+        currentJob = scope.launch {
             var pdf: PdfDocument? = null
             try {
                 val fileName = options.getString("fileName") ?: "scan_${System.currentTimeMillis()}.pdf"
+                val totalPages = pagePaths.size()
 
-                Log.d(TAG, "Starting PDF generation with ${pagePaths.size()} pages")
+                Log.d(TAG, "Starting PDF generation with $totalPages pages")
+
+                // Set up progress tracker
+                val progress = ProgressTracker(reactContext, "ScanPdfProgress", totalPages)
+                progress.start()
+                progress.reportStage(0, "Preparing...")
 
                 pdf = PdfDocument()
 
@@ -40,7 +49,10 @@ class ScanPdfModule(reactContext: ReactApplicationContext) : ReactContextBaseJav
                 val a4Height = 842
                 var pagesAdded = 0
 
-                for (i in 0 until pagePaths.size()) {
+                for (i in 0 until totalPages) {
+                    // Check for cancellation at each page boundary
+                    ensureActive()
+
                     val path = pagePaths.getString(i)
                     if (path == null) {
                         Log.w(TAG, "Page $i: path is null, skipping")
@@ -78,17 +90,22 @@ class ScanPdfModule(reactContext: ReactApplicationContext) : ReactContextBaseJav
                     pagesAdded++
                     Log.d(TAG, "Page $i added successfully")
 
-                    // Trigger GC periodically to prevent memory buildup
+                    // Report per-page progress
+                    progress.update(pagesAdded, "Processing page $pagesAdded of $totalPages...")
+
+                    // Heap-threshold GC instead of unconditional GC
                     if (pagesAdded % 5 == 0) {
-                        System.gc()
+                        ParallelPageProcessor.checkMemoryAndGc(0.80, "ScanPdf")
                     }
                 }
 
                 if (pagesAdded == 0) {
                     pdf.close()
                     promise.reject("NO_PAGES", "No valid images could be loaded. Please try again.")
-                    return@execute
+                    return@launch
                 }
+
+                progress.reportStage(90, "Saving PDF...")
 
                 // Save to app's files directory (guaranteed access)
                 val pdfDir = File(ctx.filesDir, "scans")
@@ -109,8 +126,10 @@ class ScanPdfModule(reactContext: ReactApplicationContext) : ReactContextBaseJav
                 // Verify file was written
                 if (!pdfFile.exists() || pdfFile.length() == 0L) {
                     promise.reject("WRITE_FAILED", "PDF file was not created properly")
-                    return@execute
+                    return@launch
                 }
+
+                progress.complete("PDF created successfully!")
 
                 Log.d(TAG, "PDF created successfully: ${pdfFile.length()} bytes, $pagesAdded pages")
 
@@ -120,13 +139,15 @@ class ScanPdfModule(reactContext: ReactApplicationContext) : ReactContextBaseJav
                 result.putString("fileName", fileName)
                 result.putInt("pageCount", pagesAdded)
                 promise.resolve(result)
+            } catch (e: CancellationException) {
+                Log.d(TAG, "PDF generation cancelled")
+                pdf?.close()
+                promise.reject("CANCELLED", "PDF generation was cancelled")
             } catch (e: SecurityException) {
-                // FIX: Post-audit hardening – graceful permission revocation handling
                 Log.e(TAG, "Permission denied during PDF generation", e)
                 pdf?.close()
                 promise.reject("PERMISSION_DENIED", "Storage permission was revoked. Please grant permission and try again.")
             } catch (e: OutOfMemoryError) {
-                // FIX: OOM protection – explicit handling
                 Log.e(TAG, "Out of memory during PDF generation", e)
                 pdf?.close()
                 System.gc()
@@ -134,10 +155,19 @@ class ScanPdfModule(reactContext: ReactApplicationContext) : ReactContextBaseJav
             } catch (e: Exception) {
                 Log.e(TAG, "PDF generation failed", e)
                 pdf?.close()
-                // FIX: Post-audit hardening – sanitize error messages
                 promise.reject("PDF_ERROR", "Failed to generate PDF")
             }
         }
+    }
+
+    /**
+     * Cancel an in-progress PDF generation
+     */
+    @ReactMethod
+    fun cancelGeneration(promise: Promise) {
+        currentJob?.cancel()
+        currentJob = null
+        promise.resolve(true)
     }
 
     /**
@@ -146,12 +176,12 @@ class ScanPdfModule(reactContext: ReactApplicationContext) : ReactContextBaseJav
     @ReactMethod
     fun savePdfToDownloads(sourcePath: String, fileName: String, promise: Promise) {
         val ctx = reactApplicationContext
-        executor.execute {
+        scope.launch {
             try {
                 val sourceFile = File(sourcePath)
                 if (!sourceFile.exists()) {
                     promise.reject("FILE_NOT_FOUND", "Source file not found: $sourcePath")
-                    return@execute
+                    return@launch
                 }
 
                 val resolver = ctx.contentResolver
@@ -172,7 +202,7 @@ class ScanPdfModule(reactContext: ReactApplicationContext) : ReactContextBaseJav
                 val uri = resolver.insert(collection, values)
                 if (uri == null) {
                     promise.reject("WRITE_FAILED", "Unable to create file in Downloads")
-                    return@execute
+                    return@launch
                 }
 
                 resolver.openOutputStream(uri)?.use { out ->
@@ -203,14 +233,18 @@ class ScanPdfModule(reactContext: ReactApplicationContext) : ReactContextBaseJav
     @ReactMethod
     fun processImage(path: String, options: ReadableMap, promise: Promise) {
         val ctx = reactApplicationContext
-        executor.execute {
+        scope.launch {
             try {
+                ensureActive()
+
                 Log.d(TAG, "Processing image: $path")
                 var bitmap = loadBitmapFromPath(ctx, path)
                 if (bitmap == null) {
                     promise.reject("LOAD_FAILED", "Unable to load image from: $path")
-                    return@execute
+                    return@launch
                 }
+
+                ensureActive()
 
                 // Apply rotation if specified
                 val rotation = if (options.hasKey("rotation")) options.getInt("rotation") else 0
@@ -391,12 +425,12 @@ class ScanPdfModule(reactContext: ReactApplicationContext) : ReactContextBaseJav
     @ReactMethod
     fun rotateImage(path: String, degrees: Int, promise: Promise) {
         val ctx = reactApplicationContext
-        executor.execute {
+        scope.launch {
             try {
                 var bitmap = loadBitmapFromPath(ctx, path)
                 if (bitmap == null) {
                     promise.reject("LOAD_FAILED", "Unable to load image")
-                    return@execute
+                    return@launch
                 }
 
                 bitmap = rotateBitmap(bitmap, degrees.toFloat())
@@ -680,5 +714,17 @@ class ScanPdfModule(reactContext: ReactApplicationContext) : ReactContextBaseJav
         val newHeight = (height * ratio).toInt()
 
         return Bitmap.createScaledBitmap(source, newWidth, newHeight, true)
+    }
+
+    @ReactMethod
+    fun addListener(eventName: String) {}
+
+    @ReactMethod
+    fun removeListeners(count: Int) {}
+
+    override fun invalidate() {
+        super.invalidate()
+        currentJob?.cancel()
+        scope.cancel()
     }
 }

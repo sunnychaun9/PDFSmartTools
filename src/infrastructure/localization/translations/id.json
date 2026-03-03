@@ -1,0 +1,43 @@
+{
+  "app_name": "PDF Smart Tools",
+  "greeting_morning": "Selamat pagi",
+  "greeting_afternoon": "Selamat siang",
+  "greeting_evening": "Selamat malam",
+  "home_subtitle": "Apa yang ingin Anda lakukan hari ini?",
+
+  "tool_scan": "Pindai Dokumen",
+  "tool_scan_desc": "Kamera ke PDF",
+  "tool_image_to_pdf": "Gambar ke PDF",
+  "tool_image_to_pdf_desc": "Ubah foto jadi PDF",
+  "tool_compress": "Kompres PDF",
+  "tool_compress_desc": "Kurangi ukuran file",
+  "tool_merge": "Gabung PDF",
+  "tool_merge_desc": "Gabungkan file PDF",
+  "tool_ocr": "Ekstrak Teks",
+  "tool_ocr_desc": "OCR dari gambar",
+  "tool_sign": "Tanda Tangan PDF",
+  "tool_sign_desc": "Tambah tanda tangan",
+  "tool_split": "Pisah PDF",
+  "tool_split_desc": "Ekstrak halaman",
+  "tool_protect": "Lindungi PDF",
+  "tool_protect_desc": "Tambah kata sandi",
+  "tool_unlock": "Buka PDF",
+  "tool_unlock_desc": "Hapus kata sandi",
+
+  "nav_home": "Beranda",
+  "nav_recent": "Terbaru",
+  "nav_settings": "Pengaturan",
+
+  "common_cancel": "Batal",
+  "common_ok": "OK",
+  "common_error": "Kesalahan",
+  "common_success": "Berhasil",
+  "common_loading": "Memuat...",
+  "common_processing": "Memproses...",
+
+  "upgrade_title": "Batas Harian Tercapai",
+  "upgrade_message": "Anda telah menggunakan semua penggunaan gratis hari ini. Upgrade ke Pro untuk akses tanpa batas.",
+  "upgrade_button": "Upgrade ke Pro",
+
+  "error_generic": "Terjadi kesalahan. Silakan coba lagi."
+}

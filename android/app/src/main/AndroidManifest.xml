@@ -20,7 +20,7 @@
       android:roundIcon="@mipmap/ic_launcher_round"
       android:allowBackup="false"
       android:theme="@style/AppTheme"
-      android:usesCleartextTraffic="${usesCleartextTraffic}"
+      android:networkSecurityConfig="@xml/network_security_config"
       android:supportsRtl="true">
 
       <!-- Google AdMob App ID (Test ID for development) -->
@@ -45,7 +45,32 @@
             <category android:name="android.intent.category.BROWSABLE" />
             <data android:mimeType="application/pdf" />
         </intent-filter>
+
+        <!-- Android App Links (verified deep links) -->
+        <!-- TODO: Replace pdfsmarttools.com with actual domain when available -->
+        <intent-filter android:autoVerify="true">
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.DEFAULT" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data
+                android:scheme="https"
+                android:host="pdfsmarttools.com"
+                android:pathPrefix="/open" />
+        </intent-filter>
       </activity>
+
+      <!-- Home screen widget (4x1 quick actions) -->
+      <receiver
+        android:name=".widget.QuickActionsWidget"
+        android:exported="true"
+        android:label="PDF Quick Actions">
+        <intent-filter>
+            <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+        </intent-filter>
+        <meta-data
+            android:name="android.appwidget.provider"
+            android:resource="@xml/widget_quick_actions_info" />
+      </receiver>
 
       <!-- FileProvider for sharing files -->
       <provider

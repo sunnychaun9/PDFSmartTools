@@ -9,7 +9,7 @@ import {
   createRetryableOperation,
   getErrorMessage,
   isRetryableError,
-} from '../../src/utils/safeOperations';
+} from '../../src/infrastructure/error/safeOperations';
 
 describe('safeOperations', () => {
   describe('withTimeout', () => {
@@ -144,7 +144,7 @@ describe('safeOperations', () => {
 
     it('should provide friendly message for memory errors', () => {
       const error = new Error('Out of memory');
-      expect(getErrorMessage(error)).toContain('Not enough memory');
+      expect(getErrorMessage(error)).toContain('too large to process');
     });
 
     it('should provide friendly message for permission errors', () => {
@@ -159,7 +159,7 @@ describe('safeOperations', () => {
 
     it('should provide friendly message for corrupt file errors', () => {
       const error = new Error('File is corrupted');
-      expect(getErrorMessage(error)).toContain('corrupted or invalid');
+      expect(getErrorMessage(error)).toContain('damaged');
     });
   });
 

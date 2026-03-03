@@ -3,19 +3,20 @@ import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StyleSheet, StatusBar, Platform } from 'react-native';
-import { SubscriptionProvider, ThemeProvider, useTheme, useSubscription, RatingProvider, useRating, FeatureGateProvider } from '../context';
+import { SubscriptionProvider, ThemeProvider, useTheme, useSubscription, RatingProvider, useRating, FeatureGateProvider } from '../presentation/context';
 import { colors } from '../theme';
-import { AppModal } from '../components/ui';
+import { AppModal } from '../presentation/components/ui';
+import { ErrorBoundary } from '../presentation/components/error';
 import {
   checkForUpdate,
   startFlexibleUpdate,
   completeUpdate,
   checkDownloadedUpdate,
   onUpdateDownloaded,
-} from '../services/inAppUpdateService';
-import { setupDeepLinkListener } from '../services/deepLinkingService';
+} from '../native/inAppUpdateService';
+import { setupDeepLinkListener } from '../infrastructure/deepLinking/deepLinkingService';
 // FIX: Post-audit hardening – temp file cleanup on startup
-import { cleanupStaleTempFiles } from '../services/cacheCleanupService';
+import { cleanupStaleTempFiles } from '../data/cache/cacheCleanupService';
 
 type AppProvidersProps = {
   children: React.ReactNode;
@@ -336,7 +337,9 @@ function AppContent({ children }: { children: React.ReactNode }) {
       >
         {/* Future: replace ad gate with Pro subscription */}
         <FeatureGateProvider>
-          {children}
+          <ErrorBoundary>
+            {children}
+          </ErrorBoundary>
         </FeatureGateProvider>
         <SubscriptionNotificationHandler />
         <InAppUpdateHandler />

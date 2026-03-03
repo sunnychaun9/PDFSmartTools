@@ -1,6 +1,8 @@
 package com.pdfsmarttools
 
 import android.app.Application
+import android.content.ComponentCallbacks2
+import android.util.Log
 import com.facebook.react.PackageList
 import com.facebook.react.ReactApplication
 import com.facebook.react.ReactHost
@@ -22,6 +24,12 @@ import com.pdfsmarttools.intent.IntentPackage
 import com.pdfsmarttools.pdfpagemanager.PdfPageManagerPackage
 import com.pdfsmarttools.pdftoword.PdfToWordPackage
 import com.pdfsmarttools.preflight.PdfPreflightPackage
+import com.pdfsmarttools.filepicker.FilePickerPackage
+import com.pdfsmarttools.security.RootDetectionPackage
+import com.pdfsmarttools.security.SecureStoragePackage
+import com.pdfsmarttools.security.IntegrityCheckPackage
+import com.pdfsmarttools.common.PdfWorkerPackage
+import com.pdfsmarttools.common.DeviceCapabilityPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -48,6 +56,21 @@ class MainApplication : Application(), ReactApplication {
           add(PdfPageManagerPackage())
           add(PdfToWordPackage())
           add(PdfPreflightPackage())
+          add(FilePickerPackage())
+          add(RootDetectionPackage())
+          add(SecureStoragePackage())
+          add(IntegrityCheckPackage())
+          add(PdfWorkerPackage())
+          add(DeviceCapabilityPackage())
+
+          // Debug-only stress test module (excluded from release APK)
+          if (BuildConfig.DEBUG) {
+            try {
+              val pkg = Class.forName("com.pdfsmarttools.debug.DebugStressTestPackage")
+                .getDeclaredConstructor().newInstance() as com.facebook.react.ReactPackage
+              add(pkg)
+            } catch (_: ClassNotFoundException) { }
+          }
         },
     )
   }
@@ -55,5 +78,27 @@ class MainApplication : Application(), ReactApplication {
   override fun onCreate() {
     super.onCreate()
     loadReactNative(this)
+  }
+
+  override fun onTrimMemory(level: Int) {
+    super.onTrimMemory(level)
+
+    when {
+      level >= ComponentCallbacks2.TRIM_MEMORY_COMPLETE -> {
+        Log.w(TAG, "onTrimMemory: COMPLETE — system critically low on memory, forcing GC")
+        System.gc()
+      }
+      level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW -> {
+        Log.w(TAG, "onTrimMemory: RUNNING_LOW — releasing memory via GC")
+        System.gc()
+      }
+      level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_MODERATE -> {
+        Log.i(TAG, "onTrimMemory: RUNNING_MODERATE — memory pressure increasing")
+      }
+    }
+  }
+
+  companion object {
+    private const val TAG = "PDFSmartTools"
   }
 }

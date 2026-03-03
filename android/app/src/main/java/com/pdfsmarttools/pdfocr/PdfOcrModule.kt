@@ -125,6 +125,8 @@ class PdfOcrModule(private val reactContext: ReactApplicationContext) :
 
                 promise.resolve(response)
 
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                promise.reject("OCR_CANCELLED", "OCR operation was cancelled")
             } catch (e: OutOfMemoryError) {
                 // Handle OOM gracefully
                 System.gc()

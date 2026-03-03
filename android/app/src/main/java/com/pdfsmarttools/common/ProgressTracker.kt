@@ -12,22 +12,22 @@ import com.facebook.react.modules.core.DeviceEventManagerModule
 class ProgressTracker(
     private val reactContext: ReactApplicationContext,
     private val eventName: String,
-    private val totalItems: Int
+    private val totalItems: Int,
+    private val minUpdateInterval: Long = 100L
 ) {
     private var startTime: Long = 0
     private var processedItems: Int = 0
-    private var lastUpdateTime: Long = 0
+    private var lastItemTime: Long = 0
+    private var lastEmitTime: Long = 0
     private var itemTimes: MutableList<Long> = mutableListOf()
-
-    // Minimum interval between progress updates (ms) to avoid flooding
-    private val minUpdateInterval = 100L
 
     /**
      * Start tracking progress
      */
     fun start() {
         startTime = System.currentTimeMillis()
-        lastUpdateTime = startTime
+        lastItemTime = startTime
+        lastEmitTime = 0L
         processedItems = 0
         itemTimes.clear()
     }
@@ -42,21 +42,22 @@ class ProgressTracker(
     fun update(currentItem: Int, status: String, forceUpdate: Boolean = false) {
         val now = System.currentTimeMillis()
 
-        // Track time for this item
+        // Track time for this item (uses separate timestamp from throttle)
         if (processedItems > 0 && itemTimes.size < 10) {
-            val itemTime = now - lastUpdateTime
+            val itemTime = now - lastItemTime
             if (itemTime > 0) {
                 itemTimes.add(itemTime)
             }
         }
 
         processedItems = currentItem
-        lastUpdateTime = now
+        lastItemTime = now
 
-        // Throttle updates unless forced
-        if (!forceUpdate && (now - lastUpdateTime) < minUpdateInterval) {
+        // Throttle event emission unless forced
+        if (!forceUpdate && (now - lastEmitTime) < minUpdateInterval) {
             return
         }
+        lastEmitTime = now
 
         // Calculate progress percentage
         val progress = if (totalItems > 0) {

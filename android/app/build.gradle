@@ -2,6 +2,16 @@ apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
+// Firebase plugins — only apply when google-services.json exists
+if (file("google-services.json").exists()) {
+    apply plugin: "com.google.gms.google-services"
+    apply plugin: "com.google.firebase.crashlytics"
+    apply plugin: "com.google.firebase.firebase-perf"
+} else {
+    logger.warn("google-services.json not found — Firebase plugins disabled")
+}
+apply from: file("../../node_modules/react-native-vector-icons/fonts.gradle")
+
 // Load keystore properties
 def keystorePropertiesFile = rootProject.file("keystore.properties")
 def keystoreProperties = new Properties()
@@ -128,6 +138,13 @@ dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
 
+    // Feature modules
+    implementation(project(":core-utils"))
+    implementation(project(":pdf-core"))
+    implementation(project(":pdf-manipulate"))
+    implementation(project(":pdf-sign"))
+    implementation(project(":pdf-convert"))
+
     // Google Play Billing for subscriptions
     implementation("com.android.billingclient:billing:6.0.1")
 
@@ -135,13 +152,12 @@ dependencies {
     implementation("com.google.android.play:app-update:2.1.0")
     implementation("com.google.android.play:app-update-ktx:2.1.0")
 
-    // ML Kit Text Recognition for OCR (on-device)
+    // TODO: Remove these once old bridge modules in :app are migrated to use
+    // the new use cases from feature modules. Currently kept because old engine
+    // files in :app still reference these libraries directly.
+    // After migration: PDFBox comes from :pdf-core, POI/MLKit from :pdf-convert.
     implementation("com.google.mlkit:text-recognition:16.0.0")
-
-    // Apache PDFBox for PDF encryption (Password Protect feature)
     implementation("com.tom-roush:pdfbox-android:2.0.27.0")
-
-    // Apache POI for Word document processing (Word to PDF feature)
     implementation("org.apache.poi:poi:5.2.3")
     implementation("org.apache.poi:poi-ooxml:5.2.3") {
         exclude group: 'org.apache.xmlgraphics', module: 'batik-all'
@@ -149,6 +165,10 @@ dependencies {
         exclude group: 'org.apache.xmlgraphics', module: 'fop'
     }
     implementation("org.apache.poi:poi-scratchpad:5.2.3")
+
+    // WorkManager for long-running background operations
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
+    implementation("com.google.guava:guava:31.1-android")
 
     if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")

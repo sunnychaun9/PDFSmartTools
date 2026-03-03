@@ -11,7 +11,7 @@ import {
   createInitialProgress,
   ProgressTracker,
   EnhancedProgress,
-} from '../../src/utils/progressUtils';
+} from '../../src/infrastructure/progress/progressUtils';
 
 describe('progressUtils', () => {
   describe('formatTimeRemaining', () => {

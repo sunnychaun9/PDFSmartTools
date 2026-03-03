@@ -10,7 +10,7 @@ import {
   shouldBlockProcessing,
   PreflightResult,
   PreflightSeverity,
-} from '../../src/services/pdfPreflightService';
+} from '../../src/native/pdfPreflightService';
 
 describe('pdfPreflightService', () => {
   describe('formatMemory', () => {

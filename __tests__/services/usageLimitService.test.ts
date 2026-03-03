@@ -20,7 +20,7 @@ import {
   getDailyLimit,
   resetUsage,
   FEATURES,
-} from '../../src/services/usageLimitService';
+} from '../../src/domain/featureGating/usageLimitService';
 
 describe('usageLimitService', () => {
   beforeEach(() => {

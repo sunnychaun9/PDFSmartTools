@@ -1,16 +1,14 @@
 package com.pdfsmarttools.pdfmerger
 
 import android.content.Context
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.pdf.PdfDocument
-import android.graphics.pdf.PdfRenderer
-import android.os.ParcelFileDescriptor
 import android.util.Log
+import com.pdfsmarttools.common.OperationMetrics
+import com.pdfsmarttools.common.PdfBoxHelper
+import com.tom_roush.pdfbox.io.MemoryUsageSetting
+import com.tom_roush.pdfbox.pdmodel.PDDocument
+import kotlinx.coroutines.CancellationException
 import java.io.File
-import java.io.FileOutputStream
+import kotlin.coroutines.coroutineContext
 
 data class MergeResult(
     val outputPath: String,
@@ -23,13 +21,14 @@ class PdfMergerEngine {
 
     companion object {
         private const val TAG = "PdfMergerEngine"
-        // Maximum bitmap size in pixels to prevent OOM
-        private const val MAX_BITMAP_PIXELS = 50_000_000L
-        // Batch size for processing to allow GC
-        private const val PAGE_BATCH_SIZE = 5
     }
 
-    fun merge(
+    /**
+     * Merge multiple PDFs using PDFBox structural page import.
+     * Preserves text layers, metadata, annotations, and form fields.
+     * Supports coroutine cancellation at page boundaries.
+     */
+    suspend fun merge(
         context: Context,
         inputPaths: List<String>,
         outputPath: String,
@@ -40,210 +39,134 @@ class PdfMergerEngine {
             throw IllegalArgumentException("At least 2 PDF files are required for merging")
         }
 
+        val startTime = System.currentTimeMillis()
+        PdfBoxHelper.ensureInitialized(context)
+
         val outputFile = File(outputPath)
         outputFile.parentFile?.mkdirs()
 
-        // Use atomic write: write to temp file first, then rename
-        val tempFile = File(outputFile.parentFile, ".${outputFile.name}.tmp")
-
-        val pdfDocument = PdfDocument()
-        var totalPageCount = 0
         val fileCount = inputPaths.size
+        var totalPageCount = 0
+        var totalInputSize = 0L
+
+        // Resolve all input files upfront (handles content:// URIs)
+        val resolvedFiles = mutableListOf<File>()
+        val cacheFiles = mutableListOf<File>()
 
         try {
-            for ((fileIndex, inputPath) in inputPaths.withIndex()) {
-                val inputFile = resolveInputFile(context, inputPath)
-                if (!inputFile.exists()) {
+            for (inputPath in inputPaths) {
+                val resolved = PdfBoxHelper.resolveInputFile(context, inputPath, "merge")
+                resolvedFiles.add(resolved)
+                if (inputPath.startsWith("content://")) {
+                    cacheFiles.add(resolved)
+                }
+                if (!resolved.exists()) {
                     throw IllegalArgumentException("Input file not found: $inputPath")
                 }
+                totalInputSize += resolved.length()
+            }
 
-                // Use use() extension for automatic resource cleanup (try-with-resources equivalent)
-                ParcelFileDescriptor.open(inputFile, ParcelFileDescriptor.MODE_READ_ONLY).use { fileDescriptor ->
-                    PdfRenderer(fileDescriptor).use { pdfRenderer ->
-                        val pageCount = pdfRenderer.pageCount
+            PDDocument().use { outputDoc ->
+                for ((fileIndex, inputFile) in resolvedFiles.withIndex()) {
+                    // Check for cancellation between files
+                    if (!coroutineContext[kotlinx.coroutines.Job]!!.isActive) {
+                        throw CancellationException("Merge cancelled")
+                    }
+
+                    // Use mixed memory: keep up to 50MB in RAM, spill rest to temp files
+                    PDDocument.load(inputFile, MemoryUsageSetting.setupMixed(50L * 1024 * 1024)).use { sourceDoc ->
+                        val pageCount = sourceDoc.numberOfPages
 
                         if (pageCount == 0) {
-                            return@use // Skip empty PDFs
+                            Log.w(TAG, "Skipping empty PDF: ${inputFile.name}")
+                            return@use
                         }
 
                         for (pageIndex in 0 until pageCount) {
-                            pdfRenderer.openPage(pageIndex).use { page ->
-                                // Calculate dimensions with memory limits
-                                var width = page.width
-                                var height = page.height
-                                val originalWidth = page.width
-                                val originalHeight = page.height
-
-                                // Check if bitmap would be too large and reduce if necessary
-                                val pixelCount = width.toLong() * height.toLong()
-                                if (pixelCount > MAX_BITMAP_PIXELS) {
-                                    val reductionFactor = Math.sqrt(MAX_BITMAP_PIXELS.toDouble() / pixelCount.toDouble())
-                                    width = (width * reductionFactor).toInt()
-                                    height = (height * reductionFactor).toInt()
-                                    Log.d(TAG, "File $fileIndex, Page $pageIndex: Reduced dimensions to ${width}x${height}")
-                                }
-
-                                // Use RGB_565 (2 bytes/pixel) instead of ARGB_8888 (4 bytes/pixel)
-                                val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
-                                try {
-                                    bitmap.eraseColor(Color.WHITE)
-                                    page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
-
-                                    // Draw watermark for free users
-                                    if (!isPro) {
-                                        drawWatermark(bitmap)
-                                    }
-
-                                    // Create PDF page with original dimensions
-                                    totalPageCount++
-                                    val pageInfo = PdfDocument.PageInfo.Builder(originalWidth, originalHeight, totalPageCount).create()
-                                    val pdfPage = pdfDocument.startPage(pageInfo)
-
-                                    val canvas = pdfPage.canvas
-                                    // Scale bitmap to original page dimensions if reduced
-                                    if (width != originalWidth || height != originalHeight) {
-                                        val destRect = android.graphics.Rect(0, 0, originalWidth, originalHeight)
-                                        val paint = Paint().apply {
-                                            isFilterBitmap = true
-                                            isDither = true
-                                        }
-                                        canvas.drawBitmap(bitmap, null, destRect, paint)
-                                    } else {
-                                        canvas.drawBitmap(bitmap, 0f, 0f, null)
-                                    }
-
-                                    pdfDocument.finishPage(pdfPage)
-                                } finally {
-                                    // Immediately recycle bitmap to free memory
-                                    bitmap.recycle()
-                                }
-
-                                // Trigger GC periodically to prevent memory buildup
-                                if (totalPageCount % PAGE_BATCH_SIZE == 0) {
-                                    System.gc()
-                                }
+                            // Check for cancellation at each page boundary
+                            if (!coroutineContext[kotlinx.coroutines.Job]!!.isActive) {
+                                throw CancellationException("Merge cancelled")
                             }
+
+                            val sourcePage = sourceDoc.getPage(pageIndex)
+                            val importedPage = outputDoc.importPage(sourcePage)
+
+                            if (!isPro) {
+                                PdfBoxHelper.addWatermarkToPage(outputDoc, importedPage)
+                            }
+
+                            totalPageCount++
                         }
                     }
+
+                    // Report progress per file
+                    val progress = ((fileIndex + 1) * 100) / fileCount
+                    onProgress(progress, fileIndex + 1, fileCount)
                 }
 
-                // Force GC after each file to free resources
-                System.gc()
+                if (totalPageCount == 0) {
+                    throw IllegalArgumentException("No pages found in the provided PDF files")
+                }
 
-                // Report progress per file
-                val progress = ((fileIndex + 1) * 100) / fileCount
-                onProgress(progress, fileIndex + 1, fileCount)
+                PdfBoxHelper.atomicSave(outputDoc, outputFile)
             }
 
-            if (totalPageCount == 0) {
-                throw IllegalArgumentException("No pages found in the provided PDF files")
+            // Validate output
+            val validation = PdfBoxHelper.validateOutput(outputFile, totalPageCount)
+            if (!validation.valid) {
+                throw IllegalStateException("Output validation failed: ${validation.errorMessage}")
             }
 
-            // Atomic write: write to temp file first
-            FileOutputStream(tempFile).use { output ->
-                pdfDocument.writeTo(output)
-            }
+            // Log metrics
+            PdfBoxHelper.logMetrics(OperationMetrics(
+                operationName = "merge",
+                fileCount = fileCount,
+                pageCount = totalPageCount,
+                inputSizeBytes = totalInputSize,
+                outputSizeBytes = outputFile.length(),
+                durationMs = System.currentTimeMillis() - startTime
+            ))
 
-            // Atomic rename: only rename if write succeeded
-            if (!tempFile.renameTo(outputFile)) {
-                // Fallback: copy and delete if rename fails (cross-filesystem)
-                tempFile.copyTo(outputFile, overwrite = true)
-                tempFile.delete()
-            }
-
+            return MergeResult(
+                outputPath = outputFile.absolutePath,
+                totalPages = totalPageCount,
+                fileCount = fileCount,
+                outputSize = outputFile.length()
+            )
+        } catch (e: CancellationException) {
+            outputFile.delete()
+            throw e
+        } catch (e: OutOfMemoryError) {
+            outputFile.delete()
+            throw IllegalStateException("Not enough memory to merge PDFs", e)
         } catch (e: SecurityException) {
-            // PDF is corrupted or encrypted - clean up and rethrow with clear message
-            tempFile.delete()
             outputFile.delete()
             throw IllegalArgumentException("One or more PDF files are corrupted or password-protected", e)
-        } catch (e: IllegalStateException) {
-            // PdfRenderer may throw this for malformed PDFs
-            tempFile.delete()
-            outputFile.delete()
-            throw IllegalArgumentException("One or more PDF files are malformed or cannot be read", e)
         } catch (e: Exception) {
-            // Clean up temp and partial files on failure
-            tempFile.delete()
             outputFile.delete()
             throw e
         } finally {
-            pdfDocument.close()
-            // Clean up temp file if it still exists
-            if (tempFile.exists()) tempFile.delete()
-            System.gc()
+            // Clean up cache files from content:// URIs
+            cacheFiles.forEach { it.delete() }
         }
-
-        return MergeResult(
-            outputPath = outputFile.absolutePath,
-            totalPages = totalPageCount,
-            fileCount = fileCount,
-            outputSize = outputFile.length()
-        )
     }
 
+    /**
+     * Get page count using PDFBox with memory-efficient loading.
+     * Uses temp-file-only mode to minimize heap usage for metadata reads.
+     */
     fun getPageCount(context: Context, inputPath: String): Int {
         return try {
-            val inputFile = resolveInputFile(context, inputPath)
+            PdfBoxHelper.ensureInitialized(context)
+            val inputFile = PdfBoxHelper.resolveInputFile(context, inputPath, "count")
             if (!inputFile.exists()) return 0
 
-            ParcelFileDescriptor.open(inputFile, ParcelFileDescriptor.MODE_READ_ONLY).use { fileDescriptor ->
-                PdfRenderer(fileDescriptor).use { pdfRenderer ->
-                    pdfRenderer.pageCount
-                }
+            PDDocument.load(inputFile, MemoryUsageSetting.setupTempFileOnly()).use { doc ->
+                doc.numberOfPages
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to get page count for $inputPath", e)
             0
         }
-    }
-
-    private fun resolveInputFile(context: Context, inputPath: String): File {
-        if (inputPath.startsWith("content://")) {
-            val uri = android.net.Uri.parse(inputPath)
-            val cacheFile = File(context.cacheDir, "merge_input_${System.currentTimeMillis()}_${inputPath.hashCode()}.pdf")
-
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                FileOutputStream(cacheFile).use { output ->
-                    // Use buffered copy for better memory efficiency with large files
-                    val buffer = ByteArray(8192)
-                    var bytesRead: Int
-                    while (input.read(buffer).also { bytesRead = it } != -1) {
-                        output.write(buffer, 0, bytesRead)
-                    }
-                    output.flush()
-                }
-            } ?: throw IllegalArgumentException("Cannot open content URI: $inputPath")
-
-            return cacheFile
-        }
-
-        val path = if (inputPath.startsWith("file://")) {
-            inputPath.removePrefix("file://")
-        } else {
-            inputPath
-        }
-
-        return File(path)
-    }
-
-    private fun drawWatermark(bitmap: Bitmap) {
-        val canvas = Canvas(bitmap)
-        val paint = Paint().apply {
-            color = Color.GRAY
-            alpha = 40
-            textSize = bitmap.width / 12f
-            isAntiAlias = true
-            textAlign = Paint.Align.CENTER
-        }
-
-        val watermarkText = "PDF Smart Tools - Free Version"
-
-        canvas.save()
-        val centerX = bitmap.width / 2f
-        val centerY = bitmap.height / 2f
-        canvas.translate(centerX, centerY)
-        canvas.rotate(-30f)
-        canvas.drawText(watermarkText, 0f, 0f, paint)
-        canvas.restore()
     }
 }

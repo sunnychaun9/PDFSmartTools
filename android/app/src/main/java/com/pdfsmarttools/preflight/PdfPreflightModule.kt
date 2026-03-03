@@ -36,6 +36,10 @@ class PdfPreflightModule(private val reactContext: ReactApplicationContext) :
 
         // Max bitmap size for safe processing
         private const val MAX_SAFE_BITMAP_PIXELS = 50_000_000L
+
+        // Hard limits
+        private const val MAX_FILE_SIZE_BYTES = 500L * 1024 * 1024 // 500MB
+        private const val MAX_RASTER_PAGES = 2000 // For operations that render pages to bitmaps
     }
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -59,6 +63,25 @@ class PdfPreflightModule(private val reactContext: ReactApplicationContext) :
                 }
 
                 val fileSize = file.length()
+
+                // Hard limit: reject files > 500MB
+                if (fileSize > MAX_FILE_SIZE_BYTES) {
+                    val result = Arguments.createMap().apply {
+                        putInt("pageCount", -1)
+                        putDouble("fileSize", fileSize.toDouble())
+                        putString("severity", "blocked")
+                        putString("warningMessage", "Files larger than 500MB are not supported. Please split the file into smaller parts first.")
+                        putBoolean("canProcess", false)
+                        putBoolean("shouldWarn", true)
+                        putArray("recommendations", Arguments.createArray().apply {
+                            pushString("Split this file into smaller parts, then process each part")
+                            pushString("Use a desktop PDF tool to reduce the file size first")
+                        })
+                    }
+                    promise.resolve(result)
+                    return@launch
+                }
+
                 var pageCount = 0
                 var maxPageWidth = 0
                 var maxPageHeight = 0
@@ -124,12 +147,22 @@ class PdfPreflightModule(private val reactContext: ReactApplicationContext) :
                     else -> null
                 }
 
+                // Check raster page limit
+                val exceedsRasterLimit = pageCount > MAX_RASTER_PAGES
+                if (exceedsRasterLimit) {
+                    // Override severity for raster operations
+                    // Structural operations (protect, unlock) are still allowed
+                }
+
                 // Generate recommendations
                 val recommendations = Arguments.createArray()
                 if (severity == "critical" || severity == "high") {
                     recommendations.pushString("Consider splitting the PDF into smaller parts")
                     recommendations.pushString("Close other apps to free memory")
                     recommendations.pushString("Ensure device has sufficient storage")
+                }
+                if (exceedsRasterLimit) {
+                    recommendations.pushString("This PDF has over $MAX_RASTER_PAGES pages. Image-based operations (compress, OCR, PDF-to-image) may fail. Split the file first.")
                 }
                 if (hasLargePages) {
                     recommendations.pushString("Some pages have very large dimensions and will be downscaled")
@@ -147,10 +180,12 @@ class PdfPreflightModule(private val reactContext: ReactApplicationContext) :
                     putDouble("estimatedMemoryMB", estimatedMemoryMB.toDouble())
                     putBoolean("isEncrypted", isEncrypted)
                     putBoolean("hasLargePages", hasLargePages)
+                    putBoolean("exceedsRasterLimit", exceedsRasterLimit)
                     putString("severity", severity)
                     putString("warningMessage", warningMessage)
                     putArray("recommendations", recommendations)
                     putBoolean("canProcess", severity != "critical" || !isEncrypted)
+                    putBoolean("canRasterProcess", !exceedsRasterLimit && (severity != "critical" || !isEncrypted))
                     putBoolean("shouldWarn", severity != "ok")
                 }
 

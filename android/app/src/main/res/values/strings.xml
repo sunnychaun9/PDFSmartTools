@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">PDFSmartTools</string>
+    <string name="widget_description">Quick access to PDF tools: Scan, Compress, Merge</string>
 </resources>

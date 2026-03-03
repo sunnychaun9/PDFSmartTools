@@ -1,6 +1,5 @@
 package com.pdfsmarttools.pdfcompressor
 
-import android.net.Uri
 import com.facebook.react.bridge.*
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import kotlinx.coroutines.*
@@ -10,6 +9,7 @@ class PdfCompressorModule(private val reactContext: ReactApplicationContext) :
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val engine = PdfCompressorEngine()
+    private var currentJob: Job? = null
 
     override fun getName(): String = "PdfCompressor"
 
@@ -21,7 +21,7 @@ class PdfCompressorModule(private val reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun compressPdf(inputPath: String, outputPath: String, level: String, isPro: Boolean, promise: Promise) {
-        scope.launch {
+        currentJob = scope.launch {
             try {
                 val compressionLevel = when (level.lowercase()) {
                     "low" -> CompressionLevel.LOW
@@ -53,10 +53,19 @@ class PdfCompressorModule(private val reactContext: ReactApplicationContext) :
                     putInt("pageCount", result.pageCount)
                 }
                 promise.resolve(response)
+            } catch (e: CancellationException) {
+                promise.reject("CANCELLED", "Compression operation was cancelled")
             } catch (e: Exception) {
                 promise.reject("COMPRESSION_ERROR", e.message ?: "Unknown error during compression", e)
             }
         }
+    }
+
+    @ReactMethod
+    fun cancelOperation(promise: Promise) {
+        currentJob?.cancel()
+        currentJob = null
+        promise.resolve(true)
     }
 
     @ReactMethod
@@ -71,14 +80,15 @@ class PdfCompressorModule(private val reactContext: ReactApplicationContext) :
 
     override fun invalidate() {
         super.invalidate()
+        currentJob?.cancel()
         scope.cancel()
     }
 }
 
-enum class CompressionLevel(val quality: Int, val dpi: Int) {
-    LOW(88, 200),      // ~20-30% reduction, no visible loss
-    MEDIUM(68, 150),   // ~40-55% reduction, slight loss on zoom
-    HIGH(45, 100)      // ~60-75% reduction, noticeable on inspection
+enum class CompressionLevel(val quality: Int) {
+    LOW(100),     // Re-save only, no image recompression
+    MEDIUM(75),   // Image recompression at 75% JPEG quality
+    HIGH(50)      // Aggressive image recompression at 50% JPEG quality
 }
 
 data class CompressionResult(

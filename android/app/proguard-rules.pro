@@ -65,3 +65,26 @@
 # React Native
 -keep class com.facebook.react.** { *; }
 -keep class com.facebook.hermes.** { *; }
+
+# App native modules - keep Module and Package classes (React Native reflection)
+# Engine, Helper, and utility classes will be obfuscated
+-keep class com.pdfsmarttools.**.*Module { *; }
+-keep class com.pdfsmarttools.**.*Package { *; }
+-keep class com.pdfsmarttools.MainActivity { *; }
+-keep class com.pdfsmarttools.MainApplication { *; }
+
+# Feature module classes (multi-module architecture)
+-keep class com.pdfsmarttools.core.** { *; }
+-keep class com.pdfsmarttools.pdfcore.** { *; }
+-keep class com.pdfsmarttools.manipulate.** { *; }
+-keep class com.pdfsmarttools.sign.** { *; }
+-keep class com.pdfsmarttools.convert.** { *; }
+-keep class com.pdfsmarttools.di.** { *; }
+-keep class com.pdfsmarttools.bridge.adapter.** { *; }
+
+# Firebase Crashlytics - preserve line numbers for stack traces
+-keepattributes SourceFile,LineNumberTable
+-keep public class * extends java.lang.Exception
+
+# Google Play Billing
+-keep class com.android.vending.billing.** { *; }

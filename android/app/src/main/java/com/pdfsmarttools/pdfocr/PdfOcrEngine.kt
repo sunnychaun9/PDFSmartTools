@@ -11,24 +11,39 @@ import android.graphics.Rect
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import android.graphics.pdf.PdfRenderer
-import android.net.Uri
 import android.os.ParcelFileDescriptor
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.Text
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import com.pdfsmarttools.common.MemoryBudget
+import com.pdfsmarttools.common.ParallelPageProcessor
+import com.pdfsmarttools.common.PdfBoxHelper
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.coroutines.coroutineContext
 import kotlin.coroutines.resume
 import kotlin.math.max
 import kotlin.math.min
 
 /**
  * Production-ready PDF OCR Engine
- * Converts scanned PDFs to searchable PDFs with invisible text layer
+ * Converts scanned PDFs to searchable PDFs with invisible text layer.
+ *
+ * Uses a producer-consumer pipeline for parallelism:
+ * - Producer (sequential): renders pages via PdfRenderer (not thread-safe)
+ * - Consumer pool (parallel): runs ML Kit OCR (thread-safe)
+ * - Assembly (sequential): writes output PdfDocument pages (not thread-safe)
  */
 class PdfOcrEngine(private val context: Context) {
 
@@ -47,6 +62,10 @@ class PdfOcrEngine(private val context: Context) {
         private const val CONTRAST_FACTOR = 1.2f
         // Brightness adjustment
         private const val BRIGHTNESS_OFFSET = 10f
+        // Channel buffer size (max rendered bitmaps waiting for OCR)
+        private const val CHANNEL_BUFFER_SIZE = 3
+        // Minimum pages to use parallel pipeline
+        private const val PARALLEL_THRESHOLD = 2
     }
 
     /**
@@ -98,6 +117,33 @@ class PdfOcrEngine(private val context: Context) {
     }
 
     /**
+     * A rendered page ready for OCR processing.
+     */
+    private data class RenderedPage(
+        val pageIndex: Int,
+        val bitmap: Bitmap,
+        val pageWidth: Int,
+        val pageHeight: Int,
+        val finalWidth: Int,
+        val finalHeight: Int,
+        val scaleX: Float,
+        val scaleY: Float
+    )
+
+    /**
+     * OCR result for a single page, ready for assembly.
+     */
+    private data class OcrPageResult(
+        val pageIndex: Int,
+        val ocrResult: PageOcrResult,
+        val bitmap: Bitmap,
+        val pageWidth: Int,
+        val pageHeight: Int,
+        val scaleX: Float,
+        val scaleY: Float
+    )
+
+    /**
      * Main entry point: Process PDF and create searchable version
      */
     suspend fun processToSearchablePdf(
@@ -108,11 +154,6 @@ class PdfOcrEngine(private val context: Context) {
     ): OcrResult = withContext(Dispatchers.IO) {
         val startTime = System.currentTimeMillis()
 
-        val inputFile = resolveInputFile(inputPath)
-        if (!inputFile.exists()) {
-            throw IllegalArgumentException("Input PDF file not found: $inputPath")
-        }
-
         val outputFile = File(outputPath)
         outputFile.parentFile?.mkdirs()
 
@@ -121,8 +162,8 @@ class PdfOcrEngine(private val context: Context) {
         var totalConfidence = 0f
         var confidenceCount = 0
 
-        // Open source PDF
-        val fileDescriptor = ParcelFileDescriptor.open(inputFile, ParcelFileDescriptor.MODE_READ_ONLY)
+        // Open source PDF using streaming descriptor (avoids full copy for content:// URIs)
+        val fileDescriptor = PdfBoxHelper.resolveToFileDescriptor(context, inputPath)
         val pdfRenderer = PdfRenderer(fileDescriptor)
         val pageCount = pdfRenderer.pageCount
 
@@ -138,80 +179,28 @@ class PdfOcrEngine(private val context: Context) {
         val outputPdfDocument = PdfDocument()
 
         try {
-            for (pageIndex in 0 until pageCount) {
-                progressCallback.onProgress(
-                    ((pageIndex * 100) / pageCount),
-                    pageIndex + 1,
-                    pageCount,
-                    "Processing page ${pageIndex + 1} of $pageCount..."
-                )
-
-                // Open and render page to bitmap
-                val page = pdfRenderer.openPage(pageIndex)
-                val pageWidth = page.width
-                val pageHeight = page.height
-
-                // Calculate optimal bitmap dimensions
-                val (bitmapWidth, bitmapHeight) = calculateOptimalDimensions(pageWidth, pageHeight)
-
-                // FIX: Post-audit hardening – use RGB_565 (2 bytes/pixel) instead of ARGB_8888 (4 bytes/pixel)
-                // Alpha channel not needed for OCR processing
-                val pageBitmap = Bitmap.createBitmap(bitmapWidth, bitmapHeight, Bitmap.Config.RGB_565)
-                pageBitmap.eraseColor(Color.WHITE)
-
-                // Render PDF page to bitmap
-                page.render(pageBitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
-                page.close()
-
-                // Preprocess bitmap for better OCR accuracy
-                val processedBitmap = preprocessBitmap(pageBitmap)
-                if (processedBitmap != pageBitmap) {
-                    pageBitmap.recycle()
+            if (pageCount < PARALLEL_THRESHOLD) {
+                // For 1-page PDFs, use simple sequential path
+                processSequential(
+                    pdfRenderer, outputPdfDocument, pageCount, isPro,
+                    progressCallback
+                ) { chars, words, conf, confCount ->
+                    totalCharacters += chars
+                    totalWords += words
+                    totalConfidence += conf
+                    confidenceCount += confCount
                 }
-
-                // Perform OCR on the processed bitmap
-                val pageOcrResult = performOcr(processedBitmap, pageIndex)
-
-                // Calculate scale factors for text positioning
-                val scaleX = pageWidth.toFloat() / bitmapWidth.toFloat()
-                val scaleY = pageHeight.toFloat() / bitmapHeight.toFloat()
-
-                // Create output PDF page with original dimensions
-                val pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageIndex + 1).create()
-                val pdfPage = outputPdfDocument.startPage(pageInfo)
-                val canvas = pdfPage.canvas
-
-                // Draw original page image (scaled to fit)
-                val destRect = Rect(0, 0, pageWidth, pageHeight)
-                canvas.drawBitmap(processedBitmap, null, destRect, null)
-
-                // Draw watermark for free users
-                if (!isPro) {
-                    drawWatermark(canvas, pageWidth, pageHeight)
+            } else {
+                // Multi-page: use producer-consumer pipeline
+                processParallel(
+                    pdfRenderer, outputPdfDocument, pageCount, isPro,
+                    progressCallback
+                ) { chars, words, conf, confCount ->
+                    totalCharacters += chars
+                    totalWords += words
+                    totalConfidence += conf
+                    confidenceCount += confCount
                 }
-
-                // Overlay invisible text layer for searchability
-                if (pageOcrResult.hasText) {
-                    drawInvisibleTextLayer(canvas, pageOcrResult, scaleX, scaleY)
-                }
-
-                outputPdfDocument.finishPage(pdfPage)
-
-                // Recycle bitmap to free memory
-                processedBitmap.recycle()
-
-                // Update statistics
-                totalCharacters += pageOcrResult.fullText.length
-                totalWords += countWords(pageOcrResult.fullText)
-                for (block in pageOcrResult.textBlocks) {
-                    if (block.confidence > 0) {
-                        totalConfidence += block.confidence
-                        confidenceCount++
-                    }
-                }
-
-                // FIX: Post-audit hardening – removed ineffective System.gc() call
-                // Bitmaps are properly recycled after each page, which is sufficient
             }
 
             progressCallback.onProgress(95, pageCount, pageCount, "Saving searchable PDF...")
@@ -227,11 +216,6 @@ class PdfOcrEngine(private val context: Context) {
             outputPdfDocument.close()
             pdfRenderer.close()
             fileDescriptor.close()
-
-            // Clean up temp file if created from content URI
-            if (inputPath.startsWith("content://")) {
-                inputFile.delete()
-            }
         }
 
         val processingTime = System.currentTimeMillis() - startTime
@@ -248,29 +232,235 @@ class PdfOcrEngine(private val context: Context) {
     }
 
     /**
-     * Resolve input file path, handling content:// URIs
+     * Sequential processing for single-page PDFs (no parallel overhead).
      */
-    private fun resolveInputFile(inputPath: String): File {
-        if (inputPath.startsWith("content://")) {
-            val uri = Uri.parse(inputPath)
-            val cacheFile = File(context.cacheDir, "ocr_input_${System.currentTimeMillis()}.pdf")
+    private suspend fun processSequential(
+        pdfRenderer: PdfRenderer,
+        outputPdfDocument: PdfDocument,
+        pageCount: Int,
+        isPro: Boolean,
+        progressCallback: ProgressCallback,
+        onStats: (chars: Int, words: Int, confidence: Float, confCount: Int) -> Unit
+    ) {
+        for (pageIndex in 0 until pageCount) {
+            coroutineContext.ensureActive()
 
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                FileOutputStream(cacheFile).use { output ->
-                    input.copyTo(output)
+            progressCallback.onProgress(
+                ((pageIndex * 80) / pageCount),
+                pageIndex + 1, pageCount,
+                "Processing page ${pageIndex + 1} of $pageCount..."
+            )
+
+            val rendered = renderPage(pdfRenderer, pageIndex)
+            val ocrResult = performOcr(rendered.bitmap, pageIndex)
+
+            coroutineContext.ensureActive()
+
+            assembleOutputPage(outputPdfDocument, OcrPageResult(
+                pageIndex = rendered.pageIndex,
+                ocrResult = ocrResult,
+                bitmap = rendered.bitmap,
+                pageWidth = rendered.pageWidth,
+                pageHeight = rendered.pageHeight,
+                scaleX = rendered.scaleX,
+                scaleY = rendered.scaleY
+            ), isPro)
+
+            // Collect stats
+            var confCount = 0
+            var confSum = 0f
+            for (block in ocrResult.textBlocks) {
+                if (block.confidence > 0) {
+                    confSum += block.confidence
+                    confCount++
                 }
-            } ?: throw IllegalArgumentException("Cannot open content URI: $inputPath")
+            }
+            onStats(ocrResult.fullText.length, countWords(ocrResult.fullText), confSum, confCount)
+        }
+    }
 
-            return cacheFile
+    /**
+     * Producer-consumer pipeline for multi-page PDFs.
+     *
+     * Producer: sequential rendering via PdfRenderer
+     * Consumer pool: parallel ML Kit OCR
+     * Assembly: sequential output page writing
+     */
+    private suspend fun processParallel(
+        pdfRenderer: PdfRenderer,
+        outputPdfDocument: PdfDocument,
+        pageCount: Int,
+        isPro: Boolean,
+        progressCallback: ProgressCallback,
+        onStats: (chars: Int, words: Int, confidence: Float, confCount: Int) -> Unit
+    ) = coroutineScope {
+        val maxWorkers = ParallelPageProcessor.defaultConcurrency()
+        val semaphore = Semaphore(maxWorkers)
+        val channel = Channel<RenderedPage>(CHANNEL_BUFFER_SIZE)
+        val ocrCompleted = AtomicInteger(0)
+
+        // Results array indexed by page number — preserves page order
+        val results = arrayOfNulls<OcrPageResult>(pageCount)
+
+        // Producer coroutine: renders pages sequentially (PdfRenderer is not thread-safe)
+        val producer = launch(Dispatchers.IO) {
+            for (pageIndex in 0 until pageCount) {
+                ensureActive()
+                val rendered = renderPage(pdfRenderer, pageIndex)
+                channel.send(rendered)
+            }
+            channel.close()
         }
 
-        val path = if (inputPath.startsWith("file://")) {
-            inputPath.removePrefix("file://")
-        } else {
-            inputPath
+        // Consumer pool: parallel OCR processing (ML Kit is thread-safe)
+        val consumers = launch(Dispatchers.Default) {
+            val jobs = mutableListOf<kotlinx.coroutines.Job>()
+
+            for (rendered in channel) {
+                ensureActive()
+                val job = launch {
+                    semaphore.withPermit {
+                        val ocrResult = performOcr(rendered.bitmap, rendered.pageIndex)
+
+                        results[rendered.pageIndex] = OcrPageResult(
+                            pageIndex = rendered.pageIndex,
+                            ocrResult = ocrResult,
+                            bitmap = rendered.bitmap,
+                            pageWidth = rendered.pageWidth,
+                            pageHeight = rendered.pageHeight,
+                            scaleX = rendered.scaleX,
+                            scaleY = rendered.scaleY
+                        )
+
+                        val completed = ocrCompleted.incrementAndGet()
+                        val progress = ((completed * 80) / pageCount).coerceAtMost(80)
+                        progressCallback.onProgress(
+                            progress, completed, pageCount,
+                            "OCR page $completed of $pageCount..."
+                        )
+                    }
+                }
+                jobs.add(job)
+            }
+
+            // Wait for all OCR jobs to finish
+            jobs.forEach { it.join() }
         }
 
-        return File(path)
+        // Wait for pipeline to complete
+        producer.join()
+        consumers.join()
+
+        // Assembly phase (sequential): write output pages in order
+        progressCallback.onProgress(85, pageCount, pageCount, "Assembling output PDF...")
+
+        for (pageIndex in 0 until pageCount) {
+            coroutineContext.ensureActive()
+
+            val result = results[pageIndex]
+            if (result != null) {
+                assembleOutputPage(outputPdfDocument, result, isPro)
+
+                // Collect stats
+                var confCount = 0
+                var confSum = 0f
+                for (block in result.ocrResult.textBlocks) {
+                    if (block.confidence > 0) {
+                        confSum += block.confidence
+                        confCount++
+                    }
+                }
+                onStats(result.ocrResult.fullText.length, countWords(result.ocrResult.fullText), confSum, confCount)
+            }
+
+            // Memory check during assembly
+            if ((pageIndex + 1) % 3 == 0) {
+                ParallelPageProcessor.checkMemoryAndGc(0.80, "OcrAssembly")
+            }
+        }
+
+        progressCallback.onProgress(90, pageCount, pageCount, "Finalizing...")
+    }
+
+    /**
+     * Render a single page from PdfRenderer to a preprocessed bitmap.
+     */
+    private fun renderPage(pdfRenderer: PdfRenderer, pageIndex: Int): RenderedPage {
+        val page = pdfRenderer.openPage(pageIndex)
+        val pageWidth = page.width
+        val pageHeight = page.height
+
+        // Calculate optimal bitmap dimensions
+        val (bitmapWidth, bitmapHeight) = calculateOptimalDimensions(pageWidth, pageHeight)
+
+        // Check memory budget before allocating OCR bitmap
+        var finalWidth = bitmapWidth
+        var finalHeight = bitmapHeight
+        if (!MemoryBudget.canAllocateBitmap(finalWidth, finalHeight, 2)) {
+            finalWidth /= 2
+            finalHeight /= 2
+            if (!MemoryBudget.canAllocateBitmap(finalWidth, finalHeight, 2)) {
+                page.close()
+                throw OutOfMemoryError("Not enough memory for OCR bitmap on page ${pageIndex + 1}")
+            }
+        }
+
+        val pageBitmap = Bitmap.createBitmap(finalWidth, finalHeight, Bitmap.Config.RGB_565)
+        pageBitmap.eraseColor(Color.WHITE)
+
+        page.render(pageBitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
+        page.close()
+
+        // Preprocess for better OCR accuracy
+        val processedBitmap = preprocessBitmap(pageBitmap)
+        if (processedBitmap != pageBitmap) {
+            pageBitmap.recycle()
+        }
+
+        val scaleX = pageWidth.toFloat() / finalWidth.toFloat()
+        val scaleY = pageHeight.toFloat() / finalHeight.toFloat()
+
+        return RenderedPage(
+            pageIndex = pageIndex,
+            bitmap = processedBitmap,
+            pageWidth = pageWidth,
+            pageHeight = pageHeight,
+            finalWidth = finalWidth,
+            finalHeight = finalHeight,
+            scaleX = scaleX,
+            scaleY = scaleY
+        )
+    }
+
+    /**
+     * Assemble a single output page: draw bitmap, watermark, and invisible text layer.
+     * Recycles the bitmap after use.
+     */
+    private fun assembleOutputPage(outputPdfDocument: PdfDocument, result: OcrPageResult, isPro: Boolean) {
+        val pageInfo = PdfDocument.PageInfo.Builder(
+            result.pageWidth, result.pageHeight, result.pageIndex + 1
+        ).create()
+        val pdfPage = outputPdfDocument.startPage(pageInfo)
+        val canvas = pdfPage.canvas
+
+        // Draw original page image (scaled to fit)
+        val destRect = Rect(0, 0, result.pageWidth, result.pageHeight)
+        canvas.drawBitmap(result.bitmap, null, destRect, null)
+
+        // Draw watermark for free users
+        if (!isPro) {
+            drawWatermark(canvas, result.pageWidth, result.pageHeight)
+        }
+
+        // Overlay invisible text layer for searchability
+        if (result.ocrResult.hasText) {
+            drawInvisibleTextLayer(canvas, result.ocrResult, result.scaleX, result.scaleY)
+        }
+
+        outputPdfDocument.finishPage(pdfPage)
+
+        // Recycle bitmap to free memory
+        result.bitmap.recycle()
     }
 
     /**
@@ -309,7 +499,6 @@ class PdfOcrEngine(private val context: Context) {
         val width = source.width
         val height = source.height
 
-        // FIX: Post-audit hardening – use RGB_565 for memory efficiency (alpha not needed for OCR)
         val result = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
         val canvas = Canvas(result)
 

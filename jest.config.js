@@ -1,3 +1,20 @@
 module.exports = {
   preset: 'react-native',
+  moduleNameMapper: {
+    '^@app/(.*)$': '<rootDir>/src/app/$1',
+    '^@presentation/(.*)$': '<rootDir>/src/presentation/$1',
+    '^@screens/(.*)$': '<rootDir>/src/presentation/screens/$1',
+    '^@components/(.*)$': '<rootDir>/src/presentation/components/$1',
+    '^@context/(.*)$': '<rootDir>/src/presentation/context/$1',
+    '^@navigation/(.*)$': '<rootDir>/src/presentation/navigation/$1',
+    '^@domain/(.*)$': '<rootDir>/src/domain/$1',
+    '^@data/(.*)$': '<rootDir>/src/data/$1',
+    '^@native/(.*)$': '<rootDir>/src/native/$1',
+    '^@infrastructure/(.*)$': '<rootDir>/src/infrastructure/$1',
+    '^@theme$': '<rootDir>/src/theme/index.ts',
+    '^@theme/(.*)$': '<rootDir>/src/theme/$1',
+    '^@config/(.*)$': '<rootDir>/src/config/$1',
+    '^@types/(.*)$': '<rootDir>/src/types/$1',
+    '^@assets/(.*)$': '<rootDir>/src/assets/$1',
+  },
 };

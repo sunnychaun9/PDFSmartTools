@@ -3,4 +3,9 @@ plugins { id("com.facebook.react.settings") }
 extensions.configure(com.facebook.react.ReactSettingsExtension){ ex -> ex.autolinkLibrariesFromCommand() }
 rootProject.name = 'PDFSmartTools'
 include ':app'
+include ':core-utils'
+include ':pdf-core'
+include ':pdf-manipulate'
+include ':pdf-sign'
+include ':pdf-convert'
 includeBuild('../node_modules/@react-native/gradle-plugin')

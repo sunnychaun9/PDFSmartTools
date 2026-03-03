@@ -9,6 +9,7 @@ class PdfMergerModule(private val reactContext: ReactApplicationContext) :
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val engine = PdfMergerEngine()
+    private var currentJob: Job? = null
 
     override fun getName(): String = "PdfMerger"
 
@@ -20,7 +21,7 @@ class PdfMergerModule(private val reactContext: ReactApplicationContext) :
 
     @ReactMethod
     fun mergePdfs(inputPaths: ReadableArray, outputPath: String, isPro: Boolean, promise: Promise) {
-        scope.launch {
+        currentJob = scope.launch {
             try {
                 val paths = mutableListOf<String>()
                 for (i in 0 until inputPaths.size()) {
@@ -53,10 +54,19 @@ class PdfMergerModule(private val reactContext: ReactApplicationContext) :
                     putDouble("outputSize", result.outputSize.toDouble())
                 }
                 promise.resolve(response)
+            } catch (e: CancellationException) {
+                promise.reject("CANCELLED", "Merge operation was cancelled")
             } catch (e: Exception) {
                 promise.reject("MERGE_ERROR", e.message ?: "Unknown error during merge", e)
             }
         }
+    }
+
+    @ReactMethod
+    fun cancelOperation(promise: Promise) {
+        currentJob?.cancel()
+        currentJob = null
+        promise.resolve(true)
     }
 
     @ReactMethod
@@ -83,6 +93,7 @@ class PdfMergerModule(private val reactContext: ReactApplicationContext) :
 
     override fun invalidate() {
         super.invalidate()
+        currentJob?.cancel()
         scope.cancel()
     }
 }

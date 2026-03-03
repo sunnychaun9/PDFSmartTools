@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:background="@drawable/widget_background"
+    android:padding="8dp"
+    android:gravity="center">
+
+    <!-- Scan Button -->
+    <LinearLayout
+        android:id="@+id/widget_btn_scan"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:padding="4dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:background="?android:attr/selectableItemBackground"
+        android:contentDescription="Scan Document">
+
+        <ImageView
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:src="@android:drawable/ic_menu_camera"
+            android:tint="#4F46E5" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Scan"
+            android:textSize="11sp"
+            android:textColor="#1E293B"
+            android:layout_marginTop="2dp" />
+    </LinearLayout>
+
+    <!-- Compress Button -->
+    <LinearLayout
+        android:id="@+id/widget_btn_compress"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:padding="4dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:background="?android:attr/selectableItemBackground"
+        android:contentDescription="Compress PDF">
+
+        <ImageView
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:src="@android:drawable/ic_menu_save"
+            android:tint="#0891B2" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Compress"
+            android:textSize="11sp"
+            android:textColor="#1E293B"
+            android:layout_marginTop="2dp" />
+    </LinearLayout>
+
+    <!-- Merge Button -->
+    <LinearLayout
+        android:id="@+id/widget_btn_merge"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:padding="4dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:background="?android:attr/selectableItemBackground"
+        android:contentDescription="Merge PDFs">
+
+        <ImageView
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:src="@android:drawable/ic_menu_sort_by_size"
+            android:tint="#7C3AED" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Merge"
+            android:textSize="11sp"
+            android:textColor="#1E293B"
+            android:layout_marginTop="2dp" />
+    </LinearLayout>
+
+    <!-- More Button -->
+    <LinearLayout
+        android:id="@+id/widget_btn_more"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:padding="4dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:background="?android:attr/selectableItemBackground"
+        android:contentDescription="All PDF Tools">
+
+        <ImageView
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:src="@android:drawable/ic_menu_more"
+            android:tint="#475569" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="More"
+            android:textSize="11sp"
+            android:textColor="#1E293B"
+            android:layout_marginTop="2dp" />
+    </LinearLayout>
+
+</LinearLayout>

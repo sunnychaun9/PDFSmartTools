@@ -934,7 +934,6 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: borderRadius.xl,
     borderWidth: 2,
-    overflow: 'hidden',
   },
   optionItemSelected: {
     borderWidth: 2,

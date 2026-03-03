@@ -67,7 +67,7 @@ type IconProps = {
 // Map app icon names to MaterialCommunityIcons names
 const ICON_MAP: Record<string, string> = {
   image: 'image-outline',
-  compress: 'file-compress',
+  compress: 'folder-zip-outline',
   eye: 'eye-outline',
   crown: 'crown-outline',
   'chevron-right': 'chevron-right',

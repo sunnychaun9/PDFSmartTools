@@ -20,6 +20,7 @@ import { ProtectPdfScreen } from '../screens/protect-pdf';
 import { UnlockPdfScreen } from '../screens/pdf-unlock';
 import { WordToPdfScreen } from '../screens/word-to-pdf';
 import { PdfToWordScreen } from '../screens/pdf-to-word';
+import BatchProcessingScreen from '../screens/batch-processing/BatchProcessingScreen';
 import ProScreen from '../screens/pro/ProScreen';
 
 // Debug-only screen — conditionally required so Metro tree-shakes it in production
@@ -112,6 +113,11 @@ export default function RootNavigator() {
       <Stack.Screen
         name="PdfToWord"
         component={PdfToWordScreen}
+        options={{ animation: 'slide_from_bottom' }}
+      />
+      <Stack.Screen
+        name="BatchProcessing"
+        component={BatchProcessingScreen}
         options={{ animation: 'slide_from_bottom' }}
       />
       <Stack.Screen

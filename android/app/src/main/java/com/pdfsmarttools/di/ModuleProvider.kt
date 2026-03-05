@@ -24,6 +24,7 @@ import com.pdfsmarttools.pdfcore.api.PdfConversionService
 import com.pdfsmarttools.pdfcore.api.PdfManipulationService
 import com.pdfsmarttools.pdfcore.api.PdfSigningService
 import com.pdfsmarttools.pdfcore.engine.PdfEngineOrchestrator
+import com.pdfsmarttools.manipulate.batch.TurboBatchPdfEngine
 import com.pdfsmarttools.sign.PdfSignerEngine
 import com.pdfsmarttools.sign.SignPdfUseCase
 import com.pdfsmarttools.sign.GetPageCountUseCase
@@ -82,6 +83,16 @@ object ModuleProvider {
 
     fun provideGetPageDimensionsUseCase(): GetPageDimensionsUseCase =
         GetPageDimensionsUseCase(PdfSignerEngine(), dispatchers)
+
+    // --- Batch Processing ---
+    fun provideTurboBatchPdfEngine(context: Context): TurboBatchPdfEngine =
+        TurboBatchPdfEngine(
+            context = context,
+            dispatchers = dispatchers,
+            compressUseCase = provideCompressPdfUseCase(),
+            mergeUseCase = provideMergePdfsUseCase(),
+            splitUseCase = provideSplitPdfUseCase()
+        )
 
     // --- Service Interfaces ---
     fun provideManipulationService(context: Context): PdfManipulationService =

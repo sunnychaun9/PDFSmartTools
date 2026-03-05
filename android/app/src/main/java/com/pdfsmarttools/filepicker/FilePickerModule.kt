@@ -41,6 +41,30 @@ class FilePickerModule(private val reactContext: ReactApplicationContext) :
     }
 
     @ReactMethod
+    fun pickMultiplePdfFiles(promise: Promise) {
+        val activity = reactContext.currentActivity
+        if (activity == null) {
+            promise.reject("ACTIVITY_NULL", "Activity is null")
+            return
+        }
+
+        pickerPromise = promise
+
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "application/pdf"
+            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+        }
+
+        try {
+            activity.startActivityForResult(intent, REQUEST_CODE_PICK_MULTIPLE_PDF)
+        } catch (e: Exception) {
+            pickerPromise = null
+            promise.reject("PICKER_ERROR", "Cannot open file picker: ${e.message}")
+        }
+    }
+
+    @ReactMethod
     fun pickWordFile(promise: Promise) {
         val activity = reactContext.currentActivity
         if (activity == null) {
@@ -69,7 +93,7 @@ class FilePickerModule(private val reactContext: ReactApplicationContext) :
     }
 
     override fun onActivityResult(activity: Activity, requestCode: Int, resultCode: Int, data: Intent?) {
-        if (requestCode != REQUEST_CODE_PICK_PDF && requestCode != REQUEST_CODE_PICK_WORD) {
+        if (requestCode != REQUEST_CODE_PICK_PDF && requestCode != REQUEST_CODE_PICK_WORD && requestCode != REQUEST_CODE_PICK_MULTIPLE_PDF) {
             return
         }
 
@@ -81,6 +105,43 @@ class FilePickerModule(private val reactContext: ReactApplicationContext) :
             return
         }
 
+        // Handle multiple file selection
+        if (requestCode == REQUEST_CODE_PICK_MULTIPLE_PDF) {
+            try {
+                val results = Arguments.createArray()
+                val clipData = data.clipData
+                if (clipData != null) {
+                    for (i in 0 until clipData.itemCount) {
+                        val uri = clipData.getItemAt(i).uri
+                        val fileInfo = getFileInfo(uri)
+                        val fileMap = Arguments.createMap().apply {
+                            putString("uri", uri.toString())
+                            putString("name", fileInfo.name)
+                            putDouble("size", fileInfo.size.toDouble())
+                        }
+                        results.pushMap(fileMap)
+                    }
+                } else {
+                    // Single file selected even with EXTRA_ALLOW_MULTIPLE
+                    val uri = data.data
+                    if (uri != null) {
+                        val fileInfo = getFileInfo(uri)
+                        val fileMap = Arguments.createMap().apply {
+                            putString("uri", uri.toString())
+                            putString("name", fileInfo.name)
+                            putDouble("size", fileInfo.size.toDouble())
+                        }
+                        results.pushMap(fileMap)
+                    }
+                }
+                promise.resolve(results)
+            } catch (e: Exception) {
+                promise.reject("FILE_INFO_ERROR", "Failed to get file info: ${e.message}")
+            }
+            return
+        }
+
+        // Handle single file selection
         val uri = data.data
         if (uri == null) {
             promise.resolve(null)
@@ -130,5 +191,6 @@ class FilePickerModule(private val reactContext: ReactApplicationContext) :
     companion object {
         private const val REQUEST_CODE_PICK_PDF = 9001
         private const val REQUEST_CODE_PICK_WORD = 9002
+        private const val REQUEST_CODE_PICK_MULTIPLE_PDF = 9003
     }
 }

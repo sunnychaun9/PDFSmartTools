@@ -159,6 +159,14 @@ const TOOLS: Tool[] = [
     color: colors.pdfToWord,
   },
   {
+    id: '13',
+    title: 'Batch Processing',
+    description: 'Process many PDFs at once',
+    icon: 'layers',
+    route: 'BatchProcessing',
+    color: colors.batchProcessing,
+  },
+  {
     id: '11',
     title: 'View PDF',
     description: 'Read PDF files',
@@ -341,6 +349,8 @@ function HomeScreen() {
         navigation.navigate('WordToPdf');
       } else if (route === 'PdfToWord') {
         navigation.navigate('PdfToWord');
+      } else if (route === 'BatchProcessing') {
+        navigation.navigate('BatchProcessing');
       } else {
         navigation.navigate(route as any);
       }
@@ -456,7 +466,7 @@ function HomeScreen() {
         <View style={styles.statsContent}>
           <View style={styles.statItem}>
             <Text style={[styles.statValue, { color: colors.textOnPrimary }]}>
-              15
+              16
             </Text>
             <Text style={[styles.statLabel, { color: isDark ? theme.textSecondary : 'rgba(255,255,255,0.8)' }]}>
               Tools

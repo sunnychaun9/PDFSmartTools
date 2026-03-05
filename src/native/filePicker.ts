@@ -149,6 +149,49 @@ export async function pickPdfFile(): Promise<PickedFile | null> {
   }
 }
 
+export async function pickMultiplePdfFiles(): Promise<PickedFile[]> {
+  if (Platform.OS !== 'android') {
+    throw new Error('File picker is only supported on Android');
+  }
+
+  if (!FilePicker) {
+    throw new Error('FilePicker native module is not available');
+  }
+
+  try {
+    const results = await FilePicker.pickMultiplePdfFiles();
+
+    if (!results || results.length === 0) {
+      return [];
+    }
+
+    const pickedFiles: PickedFile[] = [];
+
+    for (const result of results) {
+      const localPath = await copyToCache(result.uri, result.name);
+      const stat = await RNFS.stat(localPath);
+      const size = stat.size;
+      const isLargeFile = size > FILE_SIZE_WARNING_THRESHOLD;
+
+      pickedFiles.push({
+        uri: result.uri,
+        name: result.name,
+        size,
+        formattedSize: formatFileSize(size),
+        localPath,
+        isLargeFile,
+      });
+    }
+
+    return pickedFiles;
+  } catch (error) {
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error('Failed to pick PDF files');
+  }
+}
+
 export async function pickWordFile(): Promise<PickedFile | null> {
   if (Platform.OS !== 'android') {
     throw new Error('File picker is only supported on Android');

@@ -5,9 +5,13 @@ import android.util.Log
 import com.pdfsmarttools.core.memory.MemoryBudget
 import com.pdfsmarttools.core.result.PdfResult
 import com.pdfsmarttools.di.ModuleProvider
+import com.pdfsmarttools.manipulate.batch.BatchProgressListener
+import com.pdfsmarttools.manipulate.batch.BatchProgressSnapshot
+import com.pdfsmarttools.manipulate.batch.BatchResult
 import com.pdfsmarttools.manipulate.merge.StrictMergeEngine
 import com.pdfsmarttools.pdfcore.engine.MergeParams
 import com.pdfsmarttools.pdfcore.model.CompressionLevel
+import kotlinx.coroutines.CompletableDeferred
 import java.io.File
 import java.util.UUID
 
@@ -213,6 +217,150 @@ class StressTestRunner(private val context: Context) {
         }
 
         return results
+    }
+
+    /**
+     * Batch compress stress test: generates [fileCount] PDFs and batch compresses them.
+     */
+    suspend fun runBatchCompressStress(
+        fileCount: Int,
+        pagesPerFile: Int,
+        reporter: DebugProgressReporter
+    ): StressTestMetrics {
+        val testName = "BatchCompress ${fileCount}x${pagesPerFile}p"
+        val engineTag = "TurboBatchEngine"
+        val startTime = System.currentTimeMillis()
+        val startHeap = MemoryBudget.heapUsagePercent()
+        val startAvailable = MemoryBudget.availableMemoryMb()
+        reporter.reset()
+
+        Log.d(TAG, "Starting $testName")
+
+        val inputPaths = mutableListOf<String>()
+        var totalInputSize = 0L
+        for (i in 1..fileCount) {
+            val (path, size) = SyntheticPdfGenerator.generate(context, pagesPerFile, "batch_compress_$i")
+            inputPaths.add(path)
+            totalInputSize += size
+        }
+
+        val outputDir = File(outputDir(), "batch_compress_${UUID.randomUUID().toString().take(8)}")
+            .also { it.mkdirs() }.absolutePath
+
+        val batchEngine = ModuleProvider.provideTurboBatchPdfEngine(context)
+        val completable = CompletableDeferred<BatchResult>()
+
+        val listener = object : BatchProgressListener {
+            override fun onBatchProgress(snapshot: BatchProgressSnapshot) {
+                reporter.onProgress(snapshot.percentComplete, snapshot.completedFiles, snapshot.totalFiles,
+                    "Batch: ${snapshot.completedFiles}/${snapshot.totalFiles}")
+            }
+            override fun onBatchCompleted(result: BatchResult) { completable.complete(result) }
+            override fun onBatchFailed(jobId: String, errorMessage: String) {
+                completable.complete(BatchResult(jobId, com.pdfsmarttools.manipulate.batch.BatchOperationType.COMPRESS,
+                    com.pdfsmarttools.manipulate.batch.BatchJobStatus.FAILED, fileCount, 0, fileCount,
+                    System.currentTimeMillis() - startTime, emptyList(), emptyList()))
+            }
+            override fun onBatchCancelled(jobId: String) {
+                completable.complete(BatchResult(jobId, com.pdfsmarttools.manipulate.batch.BatchOperationType.COMPRESS,
+                    com.pdfsmarttools.manipulate.batch.BatchJobStatus.CANCELLED, fileCount, 0, 0,
+                    System.currentTimeMillis() - startTime, emptyList(), emptyList()))
+            }
+        }
+
+        batchEngine.runBatchCompress(inputPaths, outputDir, "medium", true, listener)
+        val result = completable.await()
+        batchEngine.destroy()
+
+        val durationMs = System.currentTimeMillis() - startTime
+
+        return StressTestMetrics(
+            testName = testName,
+            engineTag = engineTag,
+            status = if (result.completedFiles == fileCount) TestStatus.SUCCESS else TestStatus.FAILURE,
+            durationMs = durationMs,
+            startHeapPercent = startHeap,
+            peakHeapPercent = reporter.peakHeapPercent,
+            endHeapPercent = MemoryBudget.heapUsagePercent(),
+            startAvailableMb = startAvailable,
+            endAvailableMb = MemoryBudget.availableMemoryMb(),
+            outputSizeBytes = 0L,
+            inputSizeBytes = totalInputSize,
+            pageCount = fileCount * pagesPerFile,
+            errorCode = if (result.failedFiles > 0) "PARTIAL_FAILURE" else null,
+            errorMessage = if (result.failedFiles > 0) "${result.failedFiles} files failed" else null
+        )
+    }
+
+    /**
+     * Batch merge stress test: generates [fileCount] PDFs and batch merges them.
+     */
+    suspend fun runBatchMergeStress(
+        fileCount: Int,
+        pagesPerFile: Int,
+        reporter: DebugProgressReporter
+    ): StressTestMetrics {
+        val testName = "BatchMerge ${fileCount}x${pagesPerFile}p"
+        val engineTag = "TurboBatchEngine"
+        val startTime = System.currentTimeMillis()
+        val startHeap = MemoryBudget.heapUsagePercent()
+        val startAvailable = MemoryBudget.availableMemoryMb()
+        reporter.reset()
+
+        Log.d(TAG, "Starting $testName")
+
+        val inputPaths = mutableListOf<String>()
+        var totalInputSize = 0L
+        for (i in 1..fileCount) {
+            val (path, size) = SyntheticPdfGenerator.generate(context, pagesPerFile, "batch_merge_$i")
+            inputPaths.add(path)
+            totalInputSize += size
+        }
+
+        val outputDir = File(outputDir(), "batch_merge_${UUID.randomUUID().toString().take(8)}")
+            .also { it.mkdirs() }.absolutePath
+
+        val batchEngine = ModuleProvider.provideTurboBatchPdfEngine(context)
+        val completable = CompletableDeferred<BatchResult>()
+
+        val listener = object : BatchProgressListener {
+            override fun onBatchProgress(snapshot: BatchProgressSnapshot) {
+                reporter.onProgress(snapshot.percentComplete, snapshot.completedFiles, snapshot.totalFiles,
+                    "Batch merge: ${snapshot.completedFiles}/${snapshot.totalFiles}")
+            }
+            override fun onBatchCompleted(result: BatchResult) { completable.complete(result) }
+            override fun onBatchFailed(jobId: String, errorMessage: String) {
+                completable.complete(BatchResult(jobId, com.pdfsmarttools.manipulate.batch.BatchOperationType.MERGE,
+                    com.pdfsmarttools.manipulate.batch.BatchJobStatus.FAILED, fileCount, 0, fileCount,
+                    System.currentTimeMillis() - startTime, emptyList(), emptyList()))
+            }
+            override fun onBatchCancelled(jobId: String) {
+                completable.complete(BatchResult(jobId, com.pdfsmarttools.manipulate.batch.BatchOperationType.MERGE,
+                    com.pdfsmarttools.manipulate.batch.BatchJobStatus.CANCELLED, fileCount, 0, 0,
+                    System.currentTimeMillis() - startTime, emptyList(), emptyList()))
+            }
+        }
+
+        batchEngine.runBatchMerge(inputPaths, outputDir, true, listener)
+        val result = completable.await()
+        batchEngine.destroy()
+
+        val durationMs = System.currentTimeMillis() - startTime
+
+        return StressTestMetrics(
+            testName = testName,
+            engineTag = engineTag,
+            status = if (result.status == com.pdfsmarttools.manipulate.batch.BatchJobStatus.COMPLETED) TestStatus.SUCCESS else TestStatus.FAILURE,
+            durationMs = durationMs,
+            startHeapPercent = startHeap,
+            peakHeapPercent = reporter.peakHeapPercent,
+            endHeapPercent = MemoryBudget.heapUsagePercent(),
+            startAvailableMb = startAvailable,
+            endAvailableMb = MemoryBudget.availableMemoryMb(),
+            outputSizeBytes = 0L,
+            inputSizeBytes = totalInputSize,
+            pageCount = fileCount * pagesPerFile
+        )
     }
 
     /**

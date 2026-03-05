@@ -167,6 +167,46 @@ class DebugStressTestModule(
         }
     }
 
+    // ── Batch Stress Tests ─────────────────────────────────────────────────────
+
+    @ReactMethod
+    fun runBatchCompressStressTest(fileCount: Int, pagesPerFile: Int, promise: Promise) {
+        currentTestJob = scope.launch {
+            try {
+                val reporter = createReporter()
+                val metrics = runner.runBatchCompressStress(fileCount, pagesPerFile, reporter)
+                emitLog("Batch compress test ${metrics.status}: ${metrics.durationMs}ms, " +
+                        "${metrics.pageCount} pages")
+                promise.resolve(metrics.toWritableMap())
+            } catch (e: CancellationException) {
+                promise.reject("CANCELLED", "Batch compress stress test was cancelled")
+            } catch (e: Exception) {
+                Log.e(TAG, "runBatchCompressStressTest failed", e)
+                emitLog("Batch compress test ERROR: ${e.message}")
+                promise.reject("TEST_ERROR", e.message, e)
+            }
+        }
+    }
+
+    @ReactMethod
+    fun runBatchMergeStressTest(fileCount: Int, pagesPerFile: Int, promise: Promise) {
+        currentTestJob = scope.launch {
+            try {
+                val reporter = createReporter()
+                val metrics = runner.runBatchMergeStress(fileCount, pagesPerFile, reporter)
+                emitLog("Batch merge test ${metrics.status}: ${metrics.durationMs}ms, " +
+                        "${metrics.pageCount} pages")
+                promise.resolve(metrics.toWritableMap())
+            } catch (e: CancellationException) {
+                promise.reject("CANCELLED", "Batch merge stress test was cancelled")
+            } catch (e: Exception) {
+                Log.e(TAG, "runBatchMergeStressTest failed", e)
+                emitLog("Batch merge test ERROR: ${e.message}")
+                promise.reject("TEST_ERROR", e.message, e)
+            }
+        }
+    }
+
     // ── Memory Simulation ────────────────────────────────────────────────────
 
     @ReactMethod

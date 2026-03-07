@@ -594,6 +594,7 @@ const styles = StyleSheet.create({
   },
   emptyIcon: {
     fontSize: 48,
+    lineHeight: 64,
   },
   emptyDescription: {
     maxWidth: 280,

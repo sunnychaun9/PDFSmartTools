@@ -46,7 +46,7 @@ function ProgressModal({
           <View style={styles.header}>
             <View style={[styles.iconContainer, { backgroundColor: `${color}15` }]}>
               {icon ? (
-                <Text style={{ fontSize: 28 }}>{icon}</Text>
+                <Text style={{ fontSize: 28, lineHeight: 38 }}>{icon}</Text>
               ) : (
                 <ActivityIndicator size="large" color={color} />
               )}

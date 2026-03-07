@@ -169,6 +169,7 @@ const styles = StyleSheet.create({
   },
   iconEmoji: {
     fontSize: 36,
+    lineHeight: 48,
   },
   title: {
     fontWeight: '700',

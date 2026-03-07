@@ -6,6 +6,7 @@ import {
   Pressable,
   Dimensions,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Animated, {
   useAnimatedStyle,
@@ -108,6 +109,7 @@ function TabItem({ focused, label, icon, color, onPress, onLongPress }: TabItemP
 // Custom Tab Bar Component
 function CustomTabBar({ state, descriptors, navigation }: any) {
   const { theme } = useTheme();
+  const insets = useSafeAreaInsets();
   const indicatorPosition = useSharedValue(state.index * TAB_WIDTH);
 
   React.useEffect(() => {
@@ -135,6 +137,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
         {
           backgroundColor: theme.surface,
           borderTopColor: theme.border,
+          paddingBottom: Math.max(insets.bottom, spacing.sm),
         },
       ]}
     >
@@ -206,8 +209,6 @@ export default function TabNavigator() {
 const styles = StyleSheet.create({
   tabBar: {
     flexDirection: 'row',
-    height: Platform.OS === 'ios' ? 88 : 68,
-    paddingBottom: Platform.OS === 'ios' ? spacing.xl : spacing.sm,
     borderTopWidth: 1,
     ...shadows.sm,
     position: 'relative',

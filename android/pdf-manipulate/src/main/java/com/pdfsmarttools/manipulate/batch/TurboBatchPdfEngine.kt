@@ -4,9 +4,16 @@ import android.content.Context
 import android.util.Log
 import com.pdfsmarttools.core.dispatcher.DispatcherProvider
 import com.pdfsmarttools.core.memory.MemoryBudget
+import com.pdfsmarttools.core.progress.ProgressReporter
+import com.pdfsmarttools.core.result.PdfResult
 import com.pdfsmarttools.manipulate.compress.CompressPdfUseCase
 import com.pdfsmarttools.manipulate.merge.MergePdfsUseCase
 import com.pdfsmarttools.manipulate.split.SplitPdfUseCase
+import com.pdfsmarttools.manipulate.streaming.PdfStreamingEngine
+import com.pdfsmarttools.manipulate.streaming.StreamingCompressEngine
+import com.pdfsmarttools.manipulate.streaming.StreamingMergeEngine
+import com.pdfsmarttools.pdfcore.engine.CompressParams
+import com.pdfsmarttools.pdfcore.engine.MergeParams
 import com.pdfsmarttools.pdfcore.model.CompressionLevel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -74,6 +81,9 @@ class TurboBatchPdfEngine(
     private val worker by lazy {
         BatchWorker(context, compressUseCase, mergeUseCase, splitUseCase)
     }
+
+    private val streamingCompressEngine by lazy { StreamingCompressEngine() }
+    private val streamingMergeEngine by lazy { StreamingMergeEngine() }
 
     /**
      * Run a batch compression job.
@@ -198,8 +208,16 @@ class TurboBatchPdfEngine(
                 }
             }
             BatchOperationType.MERGE -> {
-                // For merge, all files are merged into one output
-                processMergeJob(job, tracker, outputPaths, listener)
+                // Use streaming merge for large total input or when explicitly enabled
+                val totalInputSize = job.filePaths.sumOf { File(it).let { f -> if (f.exists()) f.length() else 0L } }
+                val useStreaming = job.options.useStreaming ||
+                        totalInputSize > PdfStreamingEngine.STREAMING_THRESHOLD_BYTES
+
+                if (useStreaming) {
+                    processStreamingMergeJob(job, tracker, outputPaths, listener)
+                } else {
+                    processMergeJob(job, tracker, outputPaths, listener)
+                }
             }
             BatchOperationType.SPLIT -> {
                 processInChunks(job, chunkSize) { chunk ->
@@ -282,12 +300,76 @@ class TurboBatchPdfEngine(
             async {
                 workerSemaphore.withPermit {
                     tracker.onFileStarted(filePath)
-                    val result = worker.compressFile(filePath, job.outputDir, level, job.isPro)
+
+                    // Use streaming for large files or when streaming is explicitly enabled
+                    val useStreaming = job.options.useStreaming ||
+                            File(filePath).length() > PdfStreamingEngine.STREAMING_THRESHOLD_BYTES
+
+                    val result = if (useStreaming) {
+                        compressWithStreaming(filePath, job.outputDir, level, job.isPro)
+                    } else {
+                        worker.compressFile(filePath, job.outputDir, level, job.isPro)
+                    }
+
                     handleFileResult(result, job.jobId, tracker, outputPaths)
                     result
                 }
             }
         }.awaitAll()
+    }
+
+    /**
+     * Compress a single file using the streaming engine.
+     * Used for files >30MB to avoid loading the entire document into memory.
+     */
+    private suspend fun compressWithStreaming(
+        filePath: String,
+        outputDir: String,
+        level: CompressionLevel,
+        isPro: Boolean
+    ): BatchFileResult {
+        val inputFile = File(filePath)
+        val outputFileName = "${inputFile.nameWithoutExtension}_compressed.pdf"
+        val outputPath = File(outputDir, outputFileName).absolutePath
+
+        return try {
+            val params = CompressParams(
+                context = context,
+                inputPath = filePath,
+                outputPath = outputPath,
+                isPro = isPro,
+                level = level
+            )
+
+            val result = streamingCompressEngine.execute(params, ProgressReporter.NOOP)
+
+            when (result) {
+                is PdfResult.Success -> BatchFileResult(
+                    inputPath = filePath,
+                    outputPath = result.data.outputPath,
+                    success = true,
+                    outputSize = result.data.outputSize
+                )
+                is PdfResult.Failure -> BatchFileResult(
+                    inputPath = filePath,
+                    outputPath = outputPath,
+                    success = false,
+                    errorCode = result.error.code,
+                    errorMessage = result.error.message
+                )
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "Streaming compress failed for $filePath", e)
+            BatchFileResult(
+                inputPath = filePath,
+                outputPath = outputPath,
+                success = false,
+                errorCode = "STREAMING_ERROR",
+                errorMessage = e.message ?: "Streaming compression failed"
+            )
+        }
     }
 
     private suspend fun processMergeJob(
@@ -381,6 +463,64 @@ class TurboBatchPdfEngine(
                 }
             }
         }.awaitAll()
+    }
+
+    /**
+     * Process merge using streaming engine for large file sets.
+     * Processes one source file at a time to avoid loading all into memory.
+     */
+    private suspend fun processStreamingMergeJob(
+        job: BatchJob,
+        tracker: BatchProgressTracker,
+        outputPaths: MutableList<String>,
+        listener: BatchProgressListener
+    ) {
+        tracker.onFileStarted(job.filePaths.first())
+
+        val outputFileName = "merged_streaming_${job.jobId}.pdf"
+        val outputPath = File(job.outputDir, outputFileName).absolutePath
+
+        try {
+            val params = MergeParams(
+                context = context,
+                inputPaths = job.filePaths,
+                outputPath = outputPath,
+                isPro = job.isPro
+            )
+
+            val progressReporter = object : ProgressReporter {
+                override fun onProgress(progress: Int, currentItem: Int, totalItems: Int, status: String) {
+                    tracker.listener?.onBatchProgress(tracker.snapshot())
+                }
+                override fun onStage(progress: Int, status: String) {}
+                override fun onComplete(status: String) {}
+            }
+
+            val result = streamingMergeEngine.execute(params, progressReporter)
+
+            when (result) {
+                is PdfResult.Success -> {
+                    for (path in job.filePaths) {
+                        tracker.onFileCompleted(path)
+                    }
+                    synchronized(outputPaths) { outputPaths.add(result.data.outputPath) }
+                }
+                is PdfResult.Failure -> {
+                    for (path in job.filePaths) {
+                        tracker.onFileFailed(path, result.error.code, result.error.message)
+                    }
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "Streaming merge failed for job ${job.jobId}", e)
+            for (path in job.filePaths) {
+                tracker.onFileFailed(path, "STREAMING_MERGE_ERROR", e.message ?: "Unknown error")
+            }
+        }
+
+        queueManager.updateProgress(job.jobId, tracker.completedCount, tracker.failedCount, "")
     }
 
     private fun handleFileResult(

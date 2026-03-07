@@ -26,7 +26,9 @@ enum class BatchOperationType {
 data class BatchJobOptions(
     val compressionLevel: String = "medium",
     val chunkSize: Int = DEFAULT_CHUNK_SIZE,
-    val splitRanges: List<String> = emptyList()
+    val splitRanges: List<String> = emptyList(),
+    /** Enable streaming mode for large file processing. Auto-enabled for files >30MB. */
+    val useStreaming: Boolean = false
 ) {
     companion object {
         const val DEFAULT_CHUNK_SIZE = 10

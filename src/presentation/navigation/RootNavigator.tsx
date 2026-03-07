@@ -21,6 +21,8 @@ import { UnlockPdfScreen } from '../screens/pdf-unlock';
 import { WordToPdfScreen } from '../screens/word-to-pdf';
 import { PdfToWordScreen } from '../screens/pdf-to-word';
 import BatchProcessingScreen from '../screens/batch-processing/BatchProcessingScreen';
+import PdfPreviewScreen from '../screens/pdf-preview/PdfPreviewScreen';
+import EditPagesScreen from '../screens/edit-pages/EditPagesScreen';
 import ProScreen from '../screens/pro/ProScreen';
 
 // Debug-only screen — conditionally required so Metro tree-shakes it in production
@@ -118,6 +120,16 @@ export default function RootNavigator() {
       <Stack.Screen
         name="BatchProcessing"
         component={BatchProcessingScreen}
+        options={{ animation: 'slide_from_bottom' }}
+      />
+      <Stack.Screen
+        name="PdfPreview"
+        component={PdfPreviewScreen}
+        options={{ animation: 'slide_from_bottom' }}
+      />
+      <Stack.Screen
+        name="EditPages"
+        component={EditPagesScreen}
         options={{ animation: 'slide_from_bottom' }}
       />
       <Stack.Screen

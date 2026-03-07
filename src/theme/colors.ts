@@ -77,6 +77,10 @@ export const colors = {
   pdfToWordGradient: ['#059669', '#047857'] as const,
   batchProcessing: '#0891B2',
   batchProcessingGradient: ['#0891B2', '#0E7490'] as const,
+  pdfPreview: '#6366F1',
+  pdfPreviewGradient: ['#6366F1', '#4F46E5'] as const,
+  editPages: '#E11D48',
+  editPagesGradient: ['#E11D48', '#BE123C'] as const,
   proPlan: '#8B5CF6',
   proPlanGradient: ['#8B5CF6', '#7C3AED'] as const,
 

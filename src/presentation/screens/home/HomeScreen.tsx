@@ -167,6 +167,22 @@ const TOOLS: Tool[] = [
     color: colors.batchProcessing,
   },
   {
+    id: '14',
+    title: 'Preview PDF',
+    description: 'View page thumbnails',
+    icon: 'file-search',
+    route: 'PdfPreview',
+    color: colors.pdfPreview,
+  },
+  {
+    id: '15',
+    title: 'Edit Pages',
+    description: 'Delete, extract, rotate',
+    icon: 'edit',
+    route: 'EditPages',
+    color: colors.editPages,
+  },
+  {
     id: '11',
     title: 'View PDF',
     description: 'Read PDF files',
@@ -351,6 +367,8 @@ function HomeScreen() {
         navigation.navigate('PdfToWord');
       } else if (route === 'BatchProcessing') {
         navigation.navigate('BatchProcessing');
+      } else if (route === 'PdfPreview') {
+        navigation.navigate('PdfPreview');
       } else {
         navigation.navigate(route as any);
       }
@@ -466,7 +484,7 @@ function HomeScreen() {
         <View style={styles.statsContent}>
           <View style={styles.statItem}>
             <Text style={[styles.statValue, { color: colors.textOnPrimary }]}>
-              16
+              17
             </Text>
             <Text style={[styles.statLabel, { color: isDark ? theme.textSecondary : 'rgba(255,255,255,0.8)' }]}>
               Tools

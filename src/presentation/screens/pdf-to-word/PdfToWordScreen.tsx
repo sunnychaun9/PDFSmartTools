@@ -250,10 +250,10 @@ export default function PdfToWordScreen() {
           <View style={[styles.statsCard, { backgroundColor: theme.surface }]}>
             <View style={styles.statRow}>
               <Text variant="bodySmall" style={{ color: theme.textTertiary }}>
-                Characters extracted
+                Words extracted
               </Text>
               <Text variant="body" style={{ color: theme.textPrimary }}>
-                {conversionResult.totalCharacters.toLocaleString()}
+                {(conversionResult.wordCount || 0).toLocaleString()}
               </Text>
             </View>
             <View style={styles.statRow}>
@@ -264,6 +264,26 @@ export default function PdfToWordScreen() {
                 {conversionResult.totalParagraphs}
               </Text>
             </View>
+            {(conversionResult.headingsDetected || 0) > 0 && (
+              <View style={styles.statRow}>
+                <Text variant="bodySmall" style={{ color: theme.textTertiary }}>
+                  Headings detected
+                </Text>
+                <Text variant="body" style={{ color: theme.textPrimary }}>
+                  {conversionResult.headingsDetected}
+                </Text>
+              </View>
+            )}
+            {(conversionResult.tablesDetected || 0) > 0 && (
+              <View style={styles.statRow}>
+                <Text variant="bodySmall" style={{ color: theme.textTertiary }}>
+                  Tables reconstructed
+                </Text>
+                <Text variant="body" style={{ color: theme.textPrimary }}>
+                  {conversionResult.tablesDetected}
+                </Text>
+              </View>
+            )}
             {conversionResult.imagesExtracted > 0 && (
               <View style={styles.statRow}>
                 <Text variant="bodySmall" style={{ color: theme.textTertiary }}>
@@ -271,6 +291,26 @@ export default function PdfToWordScreen() {
                 </Text>
                 <Text variant="body" style={{ color: theme.textPrimary }}>
                   {conversionResult.imagesExtracted}
+                </Text>
+              </View>
+            )}
+            {conversionResult.ocrUsed && (
+              <View style={styles.statRow}>
+                <Text variant="bodySmall" style={{ color: theme.textTertiary }}>
+                  OCR mode
+                </Text>
+                <Text variant="body" style={{ color: colors.warning }}>
+                  Used (scanned PDF)
+                </Text>
+              </View>
+            )}
+            {(conversionResult.processingTimeMs || 0) > 0 && (
+              <View style={styles.statRow}>
+                <Text variant="bodySmall" style={{ color: theme.textTertiary }}>
+                  Processing time
+                </Text>
+                <Text variant="body" style={{ color: theme.textPrimary }}>
+                  {(conversionResult.processingTimeMs / 1000).toFixed(1)}s
                 </Text>
               </View>
             )}

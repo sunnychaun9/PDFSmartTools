@@ -31,6 +31,8 @@ import com.pdfsmarttools.security.IntegrityCheckPackage
 import com.pdfsmarttools.common.PdfWorkerPackage
 import com.pdfsmarttools.batchprocessing.BatchPdfProcessingPackage
 import com.pdfsmarttools.common.DeviceCapabilityPackage
+import com.pdfsmarttools.pdfpreview.PdfPreviewPackage
+import com.pdfsmarttools.pdfpageoperations.PdfPageOperationsPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -64,6 +66,8 @@ class MainApplication : Application(), ReactApplication {
           add(PdfWorkerPackage())
           add(DeviceCapabilityPackage())
           add(BatchPdfProcessingPackage())
+          add(PdfPreviewPackage())
+          add(PdfPageOperationsPackage())
 
           // Debug-only stress test module (excluded from release APK)
           if (BuildConfig.DEBUG) {

@@ -32,6 +32,8 @@ export type RootStackParamList = {
   WordToPdf: undefined;
   PdfToWord: undefined;
   BatchProcessing: undefined;
+  PdfPreview: undefined;
+  EditPages: undefined;
   Pro: undefined;
   DebugStressTest: undefined; // Debug-only, never registered in production
   UsageStats: undefined;

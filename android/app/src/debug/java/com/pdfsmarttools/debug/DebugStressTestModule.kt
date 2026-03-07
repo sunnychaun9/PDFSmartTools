@@ -8,6 +8,7 @@ import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.modules.core.DeviceEventManagerModule
 import com.pdfsmarttools.core.memory.MemoryBudget
+import com.pdfsmarttools.manipulate.cache.PdfCacheManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -207,6 +208,236 @@ class DebugStressTestModule(
         }
     }
 
+    // ── Streaming Stress Tests ──────────────────────────────────────────────────
+
+    @ReactMethod
+    fun runStreamingCompressStressTest(pageCount: Int, level: String, promise: Promise) {
+        currentTestJob = scope.launch {
+            try {
+                val reporter = createReporter()
+                val metrics = runner.runStreamingCompressStress(pageCount, level, reporter)
+                emitLog("Streaming compress test ${metrics.status}: ${metrics.durationMs}ms, " +
+                        "${metrics.pageCount} pages")
+                promise.resolve(metrics.toWritableMap())
+            } catch (e: CancellationException) {
+                promise.reject("CANCELLED", "Streaming compress stress test was cancelled")
+            } catch (e: Exception) {
+                Log.e(TAG, "runStreamingCompressStressTest failed", e)
+                emitLog("Streaming compress test ERROR: ${e.message}")
+                promise.reject("TEST_ERROR", e.message, e)
+            }
+        }
+    }
+
+    @ReactMethod
+    fun runStreamingMergeStressTest(fileCount: Int, pagesPerFile: Int, promise: Promise) {
+        currentTestJob = scope.launch {
+            try {
+                val reporter = createReporter()
+                val metrics = runner.runStreamingMergeStress(fileCount, pagesPerFile, reporter)
+                emitLog("Streaming merge test ${metrics.status}: ${metrics.durationMs}ms, " +
+                        "${metrics.pageCount} pages")
+                promise.resolve(metrics.toWritableMap())
+            } catch (e: CancellationException) {
+                promise.reject("CANCELLED", "Streaming merge stress test was cancelled")
+            } catch (e: Exception) {
+                Log.e(TAG, "runStreamingMergeStressTest failed", e)
+                emitLog("Streaming merge test ERROR: ${e.message}")
+                promise.reject("TEST_ERROR", e.message, e)
+            }
+        }
+    }
+
+    @ReactMethod
+    fun runLowMemoryStreamingStressTest(pageCount: Int, promise: Promise) {
+        currentTestJob = scope.launch {
+            try {
+                val reporter = createReporter()
+                val metrics = runner.runLowMemoryStreamingStress(pageCount, reporter)
+                emitLog("Low memory streaming test ${metrics.status}: ${metrics.durationMs}ms, " +
+                        "${metrics.pageCount} pages")
+                promise.resolve(metrics.toWritableMap())
+            } catch (e: CancellationException) {
+                promise.reject("CANCELLED", "Low memory streaming stress test was cancelled")
+            } catch (e: Exception) {
+                Log.e(TAG, "runLowMemoryStreamingStressTest failed", e)
+                emitLog("Low memory streaming test ERROR: ${e.message}")
+                promise.reject("TEST_ERROR", e.message, e)
+            }
+        }
+    }
+
+    // ── Cache Stress Tests ────────────────────────────────────────────────────
+
+    @ReactMethod
+    fun runCacheRepeatedCompressStressTest(pageCount: Int, iterations: Int, promise: Promise) {
+        currentTestJob = scope.launch {
+            try {
+                val reporter = createReporter()
+                val metrics = runner.runCacheRepeatedCompressStress(pageCount, iterations, reporter)
+                emitLog("Cache repeated compress test ${metrics.status}: ${metrics.durationMs}ms")
+                promise.resolve(metrics.toWritableMap())
+            } catch (e: CancellationException) {
+                promise.reject("CANCELLED", "Cache repeated compress test was cancelled")
+            } catch (e: Exception) {
+                Log.e(TAG, "runCacheRepeatedCompressStressTest failed", e)
+                emitLog("Cache repeated compress test ERROR: ${e.message}")
+                promise.reject("TEST_ERROR", e.message, e)
+            }
+        }
+    }
+
+    @ReactMethod
+    fun runCacheBatchSharedFilesStressTest(fileCount: Int, pagesPerFile: Int, promise: Promise) {
+        currentTestJob = scope.launch {
+            try {
+                val reporter = createReporter()
+                val metrics = runner.runCacheBatchSharedFilesStress(fileCount, pagesPerFile, reporter)
+                emitLog("Cache batch shared files test ${metrics.status}: ${metrics.durationMs}ms")
+                promise.resolve(metrics.toWritableMap())
+            } catch (e: CancellationException) {
+                promise.reject("CANCELLED", "Cache batch shared files test was cancelled")
+            } catch (e: Exception) {
+                Log.e(TAG, "runCacheBatchSharedFilesStressTest failed", e)
+                emitLog("Cache batch shared files test ERROR: ${e.message}")
+                promise.reject("TEST_ERROR", e.message, e)
+            }
+        }
+    }
+
+    @ReactMethod
+    fun runCacheLowMemoryEvictionStressTest(fileCount: Int, pagesPerFile: Int, promise: Promise) {
+        currentTestJob = scope.launch {
+            try {
+                val reporter = createReporter()
+                val metrics = runner.runCacheLowMemoryEvictionStress(fileCount, pagesPerFile, reporter)
+                emitLog("Cache eviction test ${metrics.status}: ${metrics.durationMs}ms")
+                promise.resolve(metrics.toWritableMap())
+            } catch (e: CancellationException) {
+                promise.reject("CANCELLED", "Cache eviction test was cancelled")
+            } catch (e: Exception) {
+                Log.e(TAG, "runCacheLowMemoryEvictionStressTest failed", e)
+                emitLog("Cache eviction test ERROR: ${e.message}")
+                promise.reject("TEST_ERROR", e.message, e)
+            }
+        }
+    }
+
+    // ── Preview Engine Stress Tests ──────────────────────────────────────────
+
+    @ReactMethod
+    fun runPreviewThumbnailStressTest(thumbnailCount: Int, promise: Promise) {
+        currentTestJob = scope.launch {
+            try {
+                val reporter = createReporter()
+                val metrics = runner.runPreviewThumbnailStress(thumbnailCount, reporter)
+                emitLog("Preview thumbnail test ${metrics.status}: ${metrics.durationMs}ms, " +
+                        "${metrics.pageCount} thumbnails")
+                promise.resolve(metrics.toWritableMap())
+            } catch (e: CancellationException) {
+                promise.reject("CANCELLED", "Preview thumbnail stress test was cancelled")
+            } catch (e: Exception) {
+                Log.e(TAG, "runPreviewThumbnailStressTest failed", e)
+                emitLog("Preview thumbnail test ERROR: ${e.message}")
+                promise.reject("TEST_ERROR", e.message, e)
+            }
+        }
+    }
+
+    @ReactMethod
+    fun runPreviewLargePdfStressTest(pageCount: Int, promise: Promise) {
+        currentTestJob = scope.launch {
+            try {
+                val reporter = createReporter()
+                val metrics = runner.runPreviewLargePdfStress(pageCount, reporter)
+                emitLog("Preview large PDF test ${metrics.status}: ${metrics.durationMs}ms, " +
+                        "${metrics.pageCount} thumbnails")
+                promise.resolve(metrics.toWritableMap())
+            } catch (e: CancellationException) {
+                promise.reject("CANCELLED", "Preview large PDF stress test was cancelled")
+            } catch (e: Exception) {
+                Log.e(TAG, "runPreviewLargePdfStressTest failed", e)
+                emitLog("Preview large PDF test ERROR: ${e.message}")
+                promise.reject("TEST_ERROR", e.message, e)
+            }
+        }
+    }
+
+    @ReactMethod
+    fun runBackgroundThumbnailGenerationStressTest(pageCount: Int, promise: Promise) {
+        currentTestJob = scope.launch {
+            try {
+                val reporter = createReporter()
+                val metrics = runner.runBackgroundThumbnailGenerationStress(pageCount, reporter)
+                emitLog("Background thumbnail generation test ${metrics.status}: ${metrics.durationMs}ms, " +
+                        "${metrics.pageCount} thumbnails")
+                promise.resolve(metrics.toWritableMap())
+            } catch (e: CancellationException) {
+                promise.reject("CANCELLED", "Background thumbnail generation stress test was cancelled")
+            } catch (e: Exception) {
+                Log.e(TAG, "runBackgroundThumbnailGenerationStressTest failed", e)
+                emitLog("Background thumbnail generation test ERROR: ${e.message}")
+                promise.reject("TEST_ERROR", e.message, e)
+            }
+        }
+    }
+
+    @ReactMethod
+    fun runPreviewRapidScrollStressTest(pageCount: Int, thumbnailCount: Int, promise: Promise) {
+        currentTestJob = scope.launch {
+            try {
+                val reporter = createReporter()
+                val metrics = runner.runPreviewRapidScrollStress(pageCount, thumbnailCount, reporter)
+                emitLog("Preview rapid scroll test ${metrics.status}: ${metrics.durationMs}ms, " +
+                        "${metrics.pageCount} thumbnails")
+                promise.resolve(metrics.toWritableMap())
+            } catch (e: CancellationException) {
+                promise.reject("CANCELLED", "Preview rapid scroll stress test was cancelled")
+            } catch (e: Exception) {
+                Log.e(TAG, "runPreviewRapidScrollStressTest failed", e)
+                emitLog("Preview rapid scroll test ERROR: ${e.message}")
+                promise.reject("TEST_ERROR", e.message, e)
+            }
+        }
+    }
+
+    @ReactMethod
+    fun getCacheMetrics(promise: Promise) {
+        scope.launch {
+            try {
+                val snapshot = PdfCacheManager.metrics.snapshot()
+                val result = Arguments.createMap().apply {
+                    putInt("hits", snapshot.hits)
+                    putInt("misses", snapshot.misses)
+                    putInt("evictions", snapshot.evictions)
+                    putInt("memoryPressureEvictions", snapshot.memoryPressureEvictions)
+                    putDouble("totalSavedMs", snapshot.totalSavedMs.toDouble())
+                    putInt("hitRatePercent", snapshot.hitRatePercent)
+                    putInt("totalRequests", snapshot.totalRequests)
+                    putInt("cacheSize", PdfCacheManager.size)
+                    putDouble("estimatedMemoryMb", PdfCacheManager.estimatedMemoryMb.toDouble())
+                }
+                promise.resolve(result)
+            } catch (e: Exception) {
+                promise.reject("METRICS_ERROR", e.message, e)
+            }
+        }
+    }
+
+    @ReactMethod
+    fun clearCache(promise: Promise) {
+        scope.launch {
+            try {
+                PdfCacheManager.clear()
+                PdfCacheManager.metrics.reset()
+                emitLog("PDF cache cleared")
+                promise.resolve(true)
+            } catch (e: Exception) {
+                promise.reject("CACHE_ERROR", e.message, e)
+            }
+        }
+    }
+
     // ── Memory Simulation ────────────────────────────────────────────────────
 
     @ReactMethod
@@ -371,6 +602,9 @@ class DebugStressTestModule(
         currentTestJob?.cancel()
         scope.cancel()
         memorySimulator.reset()
+        try {
+            kotlinx.coroutines.runBlocking { PdfCacheManager.clear() }
+        } catch (_: Exception) { }
         try {
             storageSimulator.cleanup(reactContext.applicationContext)
             SyntheticPdfGenerator.cleanup(reactContext.applicationContext)

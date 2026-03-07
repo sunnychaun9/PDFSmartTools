@@ -45,6 +45,9 @@ class BitmapPool(private val maxPoolSize: Int = 3) {
         }
     }
 
+    /** Current number of bitmaps in the pool. */
+    val poolSize: Int get() = pool.size
+
     /**
      * Recycle all pooled bitmaps and clear the pool.
      */

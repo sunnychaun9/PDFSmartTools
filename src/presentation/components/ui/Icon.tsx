@@ -55,7 +55,10 @@ export type IconName =
   | 'unlock'
   | 'grid'
   | 'list'
-  | 'trash-2';
+  | 'trash-2'
+  | 'file-search'
+  | 'edit'
+  | 'rotate-cw';
 
 type IconProps = {
   name: IconName | string;
@@ -122,6 +125,9 @@ const ICON_MAP: Record<string, string> = {
   'trash-2': 'delete-outline',
   search: 'magnify',
   'file-text': 'file-document-outline',
+  'file-search': 'file-search-outline',
+  edit: 'file-edit-outline',
+  'rotate-cw': 'rotate-right',
 };
 
 function Icon({ name, size = 24, color, accessibilityLabel }: IconProps) {

@@ -86,5 +86,9 @@
 -keepattributes SourceFile,LineNumberTable
 -keep public class * extends java.lang.Exception
 
+# Google ML Kit (referenced by react-native-camera but not directly used)
+-dontwarn com.google.mlkit.vision.common.internal.Detector
+-dontwarn com.google.mlkit.vision.text.TextRecognizerOptions
+
 # Google Play Billing
 -keep class com.android.vending.billing.** { *; }

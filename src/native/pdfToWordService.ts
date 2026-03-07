@@ -20,6 +20,13 @@ export type ConversionResult = {
   hasLayoutWarning: boolean;
   formattedOriginalSize: string;
   formattedDocxSize: string;
+  // Enhanced metrics
+  pagesProcessed: number;
+  headingsDetected: number;
+  tablesDetected: number;
+  ocrUsed: boolean;
+  processingTimeMs: number;
+  wordCount: number;
 };
 
 export type ConversionOptions = {
@@ -96,6 +103,12 @@ export async function convertPdfToWord(
       hasLayoutWarning: result.hasLayoutWarning,
       formattedOriginalSize: formatFileSize(result.originalSize),
       formattedDocxSize: formatFileSize(result.docxSize),
+      pagesProcessed: result.pagesProcessed ?? result.pageCount,
+      headingsDetected: result.headingsDetected ?? 0,
+      tablesDetected: result.tablesDetected ?? 0,
+      ocrUsed: result.ocrUsed ?? false,
+      processingTimeMs: result.processingTimeMs ?? 0,
+      wordCount: result.wordCount ?? 0,
     };
   } finally {
     if (progressSubscription) {

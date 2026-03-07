@@ -266,10 +266,12 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.xl,
     padding: spacing.lg,
     width: '100%',
+    alignItems: 'center',
   },
   featureRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    width: '100%',
     paddingVertical: spacing.sm,
   },
   featureIconBg: {
